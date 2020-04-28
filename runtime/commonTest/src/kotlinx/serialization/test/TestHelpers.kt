@@ -30,7 +30,7 @@ fun SerialDescriptor.assertDescriptorEqualsTo(other: SerialDescriptor) {
     }
 }
 
-inline fun noJs(test: () -> Unit) {
+inline fun noLegacyJs(test: () -> Unit) {
     if (!isJs()) test()
 }
 
