@@ -33,7 +33,7 @@ class SpecialFloatingPointValuesTest : JsonTestBase() {
     @Test
     fun testNans() = parametrizedTest {
         test(Box(Double.NaN, Float.NaN), """{"d":NaN,"f":NaN}""", it)
-        noLegacyJs { // Number formatting
+        noJs { // Number formatting
             test(Box(0.0, Float.NaN), """{"d":0.0,"f":NaN}""", it)
             test(Box(Double.NaN, 0.0f), """{"d":NaN,"f":0.0}""", it)
         }
