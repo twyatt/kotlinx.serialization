@@ -31,7 +31,7 @@ data class NumberTypesUmbrella(
 )
 
 @Serializable
-data class BinaryPayload(
-    val foo: ByteString,
-    val bar: ByteString
+data class ByteArrayUmbrella(
+    @ByteString val foo: ByteArray,
+    @ByteString val bar: ByteArray
 )

@@ -52,10 +52,10 @@ class CbrWriterTest {
         val shortData = HexConverter.parseHexBinary("6332383500000000000001ad")
         val longData = HexConverter.parseHexBinary("6332383500000000000001ad9e8bac4209005a478736ad000010011001ad")
 
-        val test = BinaryPayload(ByteString(shortData), ByteString(longData))
+        val test = ByteArrayUmbrella(shortData, longData)
         assertEquals (
             "bf63666f6f4c6332383500000000000001ad63626172581e6332383500000000000001ad9e8bac4209005a478736ad000010011001adff",
-            Cbor.dumps(BinaryPayload.serializer(), test)
+            Cbor.encodeToHexString(ByteArrayUmbrella.serializer(), test)
         )
     }
 }

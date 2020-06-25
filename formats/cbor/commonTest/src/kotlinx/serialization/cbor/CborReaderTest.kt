@@ -49,7 +49,7 @@ class CborReaderTest {
         // 30 bytes
         withDecoder("581E6332383500000000000001AD9E8BAC4209005A478736AD000010011001AD") {
             assertEquals(
-                expected ="6332383500000000000001AD9E8BAC4209005A478736AD000010011001AD",
+                expected = "6332383500000000000001AD9E8BAC4209005A478736AD000010011001AD",
                 actual = HexConverter.printHexBinary(nextByteString())
             )
         }
@@ -123,17 +123,17 @@ class CborReaderTest {
     fun testDecodeIndefiniteLengthByteStringIntoSimpleObject() {
         val longData = HexConverter.parseHexBinary("6332383500000000000001AD9E8BAC4209005A478736AD000010011001AD6332383500000000000001AD")
         val shortData = HexConverter.parseHexBinary("6332383500000000000001AD")
-        val test = BinaryPayload(ByteString(longData), ByteString(shortData))
-        val res = Cbor.loads(
-            BinaryPayload.serializer(),
+        val test = ByteArrayUmbrella(longData, shortData)
+        val res = Cbor.decodeFromHexString(
+            ByteArrayUmbrella.serializer(),
             "A263666F6F5F581E6332383500000000000001AD9E8BAC4209005A478736AD000010011001AD4C6332383500000000000001ADFF636261724c6332383500000000000001ad".toLowerCase())
         assertEquals(
-            HexConverter.printHexBinary(test.foo.bytes),
-            HexConverter.printHexBinary(res.foo.bytes)
+            HexConverter.printHexBinary(test.foo),
+            HexConverter.printHexBinary(res.foo)
         )
         assertEquals(
-            HexConverter.printHexBinary(test.bar.bytes),
-            HexConverter.printHexBinary(res.bar.bytes)
+            HexConverter.printHexBinary(test.bar),
+            HexConverter.printHexBinary(res.bar)
         )
     }
 
@@ -141,17 +141,17 @@ class CborReaderTest {
     fun testDecodeByteStringIntoSimpleObject() {
         val longData = HexConverter.parseHexBinary("6332383500000000000001AD9E8BAC4209005A478736AD000010011001AD")
         val shortData = HexConverter.parseHexBinary("6332383500000000000001AD")
-        val test = BinaryPayload(ByteString(shortData), ByteString(longData))
-        val res = Cbor.loads(
-            BinaryPayload.serializer(),
+        val expected = ByteArrayUmbrella(shortData, longData)
+        val decoded = Cbor.decodeFromHexString(
+            ByteArrayUmbrella.serializer(),
             "bf63666f6f4c6332383500000000000001ad63626172581e6332383500000000000001ad9e8bac4209005a478736ad000010011001adff".toLowerCase())
         assertEquals(
-            HexConverter.printHexBinary(test.foo.bytes),
-            HexConverter.printHexBinary(res.foo.bytes)
+            HexConverter.printHexBinary(expected.foo),
+            HexConverter.printHexBinary(decoded.foo)
         )
         assertEquals(
-            HexConverter.printHexBinary(test.bar.bytes),
-            HexConverter.printHexBinary(res.bar.bytes)
+            HexConverter.printHexBinary(expected.bar),
+            HexConverter.printHexBinary(decoded.bar)
         )
     }
 
@@ -160,8 +160,8 @@ class CborReaderTest {
         // 5b denotes a ByteString with additional data 27
         // 0x80_00_00_00_00_00_00_00
         assertFailsWith<SerializationException> {
-            Cbor.loads(
-                BinaryPayload.serializer(),
+            Cbor.decodeFromHexString(
+                ByteArrayUmbrella.serializer(),
                 "5b800000000000000010000000000000AD"
             )
         }

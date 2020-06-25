@@ -51,9 +51,19 @@ public class Cbor(
     }
 
     // Writes class as map [fieldName, fieldValue]
-    private open inner class CborWriter(val encoder: CborEncoder) : CborAbstractEncoder() {
+    private open inner class CborWriter(val encoder: CborEncoder) : AbstractEncoder() {
         override val context: SerialModule
             get() = this@Cbor.context
+
+        private var encodeByteArrayAsByteString = false
+
+        override fun <T> encodeSerializableValue(serializer: SerializationStrategy<T>, value: T) {
+            if (serializer.descriptor.kind is StructureKind.LIST && encodeByteArrayAsByteString) {
+                encoder.encodeByteString(value as ByteArray)
+            } else {
+                super.encodeSerializableValue(serializer, value)
+            }
+        }
 
         override fun shouldEncodeElementDefault(descriptor: SerialDescriptor, index: Int): Boolean = encodeDefaults
 
@@ -73,13 +83,13 @@ public class Cbor(
         override fun endStructure(descriptor: SerialDescriptor) = encoder.end()
 
         override fun encodeElement(descriptor: SerialDescriptor, index: Int): Boolean {
+            encodeByteArrayAsByteString = descriptor.isByteString(index)
             val name = descriptor.getElementName(index)
             encoder.encodeString(name)
             return true
         }
 
         override fun encodeString(value: String) = encoder.encodeString(value)
-        override fun encodeByteString(value: ByteString) = encoder.encodeByteString(value)
 
         override fun encodeFloat(value: Float) = encoder.encodeFloat(value)
         override fun encodeDouble(value: Double) = encoder.encodeDouble(value)
@@ -114,17 +124,17 @@ public class Cbor(
 
         fun encodeNumber(value: Long) = output.write(composeNumber(value))
 
-        fun encodeByteString(value: ByteString) {
-            val header = composeNumber(value.size.toLong())
-            header[0] = header[0] or HEADER_BYTESTRING
-            output.write(header)
-            output.write(value.bytes)
+        fun encodeByteString(data: ByteArray) {
+            encodeByteArray(data, HEADER_BYTE_STRING)
         }
 
         fun encodeString(value: String) {
-            val data = value.encodeToByteArray()
+            encodeByteArray(value.encodeToByteArray(), HEADER_STRING)
+        }
+
+        private fun encodeByteArray(data: ByteArray, type: Byte) {
             val header = composeNumber(data.size.toLong())
-            header[0] = header[0] or HEADER_STRING
+            header[0] = header[0] or type
             output.write(header)
             output.write(data)
         }
@@ -187,13 +197,15 @@ public class Cbor(
         override fun decodeElementIndex(descriptor: SerialDescriptor) = if (!finiteMode && decoder.isEnd() || (finiteMode && ind >= size)) READ_DONE else ind++
     }
 
-    private open inner class CborReader(val decoder: CborDecoder) : CborAbstractDecoder() {
+    private open inner class CborReader(val decoder: CborDecoder) : AbstractDecoder() {
 
         protected var size = -1
             private set
         protected var finiteMode = false
             private set
         private var readProperties: Int = 0
+
+        private var decodeByteArrayAsByteString = false
 
         protected fun setSize(size: Int) {
             if (size >= 0) {
@@ -225,7 +237,17 @@ public class Cbor(
             if (!finiteMode && decoder.isEnd() || (finiteMode && readProperties >= size)) return READ_DONE
             val elemName = decoder.nextString()
             readProperties++
-            return descriptor.getElementIndexOrThrow(elemName)
+            val index = descriptor.getElementIndexOrThrow(elemName)
+            decodeByteArrayAsByteString = descriptor.isByteString(index)
+            return index
+        }
+
+        override fun <T> decodeSerializableValue(deserializer: DeserializationStrategy<T>): T {
+            return if (deserializer.descriptor.kind is StructureKind.LIST && decodeByteArrayAsByteString) {
+                decoder.nextByteString() as T
+            } else {
+                super.decodeSerializableValue(deserializer)
+            }
         }
 
         override fun decodeString() = decoder.nextString()
@@ -238,7 +260,6 @@ public class Cbor(
         override fun decodeBoolean() = decoder.nextBoolean()
 
         override fun decodeByte() = decoder.nextNumber().toByte()
-        override fun decodeByteString() = ByteString(decoder.nextByteString())
         override fun decodeShort() = decoder.nextNumber().toShort()
         override fun decodeChar() = decoder.nextNumber().toChar()
         override fun decodeInt() = decoder.nextNumber().toInt()
@@ -253,7 +274,7 @@ public class Cbor(
 
     internal class CborDecoder(private val input: ByteArrayInput) {
         private var curByte: Int = -1
-        private var isReadingUnknownLengthByteString: Boolean = false
+        private var isReadingUnknownLengthByteString = false
 
         init {
             readByte()
@@ -323,7 +344,7 @@ public class Cbor(
         }
 
         fun nextByteString(): ByteArray {
-            if ((curByte and 0b111_00000) != HEADER_BYTESTRING.toInt())
+            if ((curByte and 0b111_00000) != HEADER_BYTE_STRING.toInt())
                 throw CborDecodingException("start of a ByteString.", curByte)
 
             val bytesToRead: Long = when (val additionalData = curByte and 0b000_11111) {
@@ -390,7 +411,7 @@ public class Cbor(
          *
          * @throws SerializationException if the provided length does not fit in a 32-bit signed [Int].
          */
-        private fun Input.readBytes(length: Long): ByteArray =
+        private fun ByteArrayInput.readBytes(length: Long): ByteArray =
             if (length > Int.MAX_VALUE) {
                 throw SerializationException("Unsupported length: $length at current byte: $curByte.")
             } else {
@@ -431,15 +452,16 @@ public class Cbor(
 
         /**
          * Indefinite-length byte strings contain an unknown number of fixed-length byte strings (chunks).
-         * Chunks should always provide their own lengths, that is, nested, indefinite-length
-         * byte strings are not allowed per the CBOR RFC.
+         *
+         * Chunks should always provide their own lengths; that is, nested, indefinite-length byte strings are not
+         * allowed per the CBOR RFC.
          *
          * @return A [ByteArray] containing all of the concatenated byte strings found in the buffer.
          * @throws CborDecodingException if invoked while already reading an indefinite-length byte string.
          */
         private fun readIndefiniteLengthByteString(): ByteArray {
             if (isReadingUnknownLengthByteString)
-                throw CborDecodingException("Nested indefinite-length bytestrings are not allowed", curByte)
+                throw CborDecodingException("Nested indefinite-length byte string is not allowed", curByte)
 
             val byteStrings = mutableListOf<ByteArray>()
 
@@ -468,9 +490,9 @@ public class Cbor(
         private const val BEGIN_MAP = 0xbf
         private const val BREAK = 0xff
 
+        private const val HEADER_BYTE_STRING: Byte = 0b010_00000
         private const val HEADER_STRING: Byte = 0b011_00000
         private const val HEADER_NEGATIVE: Byte = 0b001_00000
-        private const val HEADER_BYTESTRING: Byte = 0b010_00000
         private const val HEADER_ARRAY: Int = 0b100_00000
         private const val HEADER_MAP: Int = 0b101_00000
     }
@@ -500,3 +522,6 @@ private fun Iterable<ByteArray>.flatten(): ByteArray {
 
     return output
 }
+
+private fun SerialDescriptor.isByteString(index: Int): Boolean =
+    getElementAnnotations(index).find { it is ByteString } != null
