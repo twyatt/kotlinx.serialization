@@ -130,14 +130,6 @@ public interface SerialDescriptor {
      */
     public val serialName: String
 
-    @Deprecated(
-        message = "name property deprecated in the favour of serialName",
-        level = DeprecationLevel.ERROR,
-        replaceWith = ReplaceWith("serialName")
-    )
-    public val name: String
-        get() = serialName
-
     /**
      * The kind of the serialized form that determines **the shape** of the serialized data.
      * Formats use serial kind to add and parse serializer-agnostic metadata to the result.
@@ -175,9 +167,6 @@ public interface SerialDescriptor {
      * metadata that may be used during serialization, for example a [serial id][SerialId].
      */
     public val annotations: List<Annotation> get() = emptyList()
-
-    @Deprecated(message = "Deprecated in the favour of 'annotations' property", replaceWith = ReplaceWith("annotations"))
-    public fun getEntityAnnotations(): List<Annotation> = emptyList()
 
     /**
      * Returns a _positional_ name of the child at the given [index].
@@ -275,8 +264,8 @@ public fun SerialDescriptor.elementNames(): List<String> {
  * given [name] is not associated with any element in the descriptor.
  */
 public fun SerialDescriptor.getElementIndexOrThrow(name: String): Int {
-    val i = getElementIndex(name)
-    if (i == CompositeDecoder.UNKNOWN_NAME)
-        throw SerializationException("${this.serialName} does not contain element with name '$name'")
-    return i
+    val index = getElementIndex(name)
+    if (index == CompositeDecoder.UNKNOWN_NAME)
+        throw SerializationException("$serialName does not contain element with name '$name'")
+    return index
 }

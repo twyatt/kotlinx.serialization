@@ -92,11 +92,11 @@ class DynamicSerializerTest {
         serializer: SerializationStrategy<T>? = null,
         noinline assertions: ((T, dynamic) -> Unit)? = null
     ) {
-        val effectiveSerializer = serializer ?: EmptyModule.getContextualOrDefault(T::class)
+        val effectiveSerializer = serializer ?: EmptyModule.getContextualOrDefault<T>()
         val serialized = DynamicObjectSerializer().serialize(effectiveSerializer, data)
         assertions?.invoke(data, serialized)
         assertEquals(
-            Json.stringify(effectiveSerializer, data),
+            Json.encodeToString(effectiveSerializer, data),
             JSON.stringify(serialized),
             "JSON.stringify representation must be the same"
         )

@@ -4,15 +4,16 @@
 
 package kotlinx.serialization.cbor
 
-import kotlinx.io.*
 import kotlinx.serialization.*
 import kotlinx.serialization.CompositeDecoder.Companion.READ_DONE
 import kotlinx.serialization.builtins.*
+import kotlinx.serialization.cbor.internal.ByteArrayInput
+import kotlinx.serialization.cbor.internal.ByteArrayOutput
 import kotlinx.serialization.modules.*
 import kotlin.experimental.*
 
 /**
- * Implements [encoding][dump] and [decoding][load] classes to/from bytes
+ * Implements [encoding][encodeToByteArray] and [decoding][decodeFromByteArray] classes to/from bytes
  * using [CBOR](https://tools.ietf.org/html/rfc7049) specification.
  * It is typically used by constructing an application-specific instance, with configured behaviour, and,
  * if necessary, registered custom serializers (in [SerialModule] provided by [context] constructor parameter).
@@ -101,7 +102,7 @@ public class Cbor(
     }
 
     // For details of representation, see https://tools.ietf.org/html/rfc7049#section-2.1
-    internal class CborEncoder(private val output: Output) {
+    internal class CborEncoder(private val output: ByteArrayOutput) {
 
         fun startArray() = output.write(BEGIN_ARRAY)
         fun startMap() = output.write(BEGIN_MAP)
@@ -250,7 +251,7 @@ public class Cbor(
 
     }
 
-    internal class CborDecoder(private val input: Input) {
+    internal class CborDecoder(private val input: ByteArrayInput) {
         private var curByte: Int = -1
         private var isReadingUnknownLengthByteString: Boolean = false
 
@@ -365,7 +366,7 @@ public class Cbor(
             else res
         }
 
-        private fun Input.readExact(bytes: Int): Long {
+        private fun ByteArrayInput.readExact(bytes: Int): Long {
             val arr = readExactNBytes(bytes)
             var result = 0L
             for (i in 0 until bytes) {
@@ -374,7 +375,7 @@ public class Cbor(
             return result
         }
 
-        private fun Input.readExactNBytes(bytesCount: Int): ByteArray {
+        private fun ByteArrayInput.readExactNBytes(bytesCount: Int): ByteArray {
             if (bytesCount > availableBytes) {
                 error("Unexpected EOF, available $availableBytes bytes, requested: $bytesCount")
             }
@@ -474,20 +475,14 @@ public class Cbor(
         private const val HEADER_MAP: Int = 0b101_00000
     }
 
-    /**
-     * Serializes [value] to CBOR bytes using given [serializer].
-     */
-    override fun <T> dump(serializer: SerializationStrategy<T>, value: T): ByteArray {
+    override fun <T> encodeToByteArray(serializer: SerializationStrategy<T>, value: T): ByteArray {
         val output = ByteArrayOutput()
         val dumper = CborWriter(CborEncoder(output))
         dumper.encode(serializer, value)
         return output.toByteArray()
     }
 
-    /**
-     * Loads value of type [T] from given CBOR [bytes] using [deserializer].
-     */
-    override fun <T> load(deserializer: DeserializationStrategy<T>, bytes: ByteArray): T {
+    override fun <T> decodeFromByteArray(deserializer: DeserializationStrategy<T>, bytes: ByteArray): T {
         val stream = ByteArrayInput(bytes)
         val reader = CborReader(CborDecoder(stream))
         return reader.decode(deserializer)

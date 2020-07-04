@@ -64,7 +64,6 @@ public class SerializersModuleBuilder internal constructor() : SerialModuleColle
     /**
      * A reified version of `contextual(KClass, Serializer)`
      */
-    @ImplicitReflectionSerializer
     public inline fun <reified T : Any> contextual(): Unit = contextual(T::class, serializer())
 
     /**
@@ -100,7 +99,7 @@ public class SerializersModuleBuilder internal constructor() : SerialModuleColle
      * (which is useful if base class is serializable). To add subclasses, use
      * [PolymorphicModuleBuilder.subclass] or [PolymorphicModuleBuilder.with].
      *
-     * If serializer already registered for the given KClass in the given scope, a [SerializerAlreadyRegisteredException] is thrown.
+     * If serializer already registered for the given KClass in the given scope, a [IllegalArgumentException] is thrown.
      * To override registered serializers, combine built module with another using
      * [SerialModule.overwriteWith].
      *
@@ -144,7 +143,7 @@ public class SerializersModuleBuilder internal constructor() : SerialModuleColle
      * }
      * ```
      *
-     * If serializer already registered for the given KClass in the given scope, a [SerializerAlreadyRegisteredException] is thrown.
+     * If serializer already registered for the given KClass in the given scope, a [IllegalArgumentException] is thrown.
      * To override registered serializers, combine built module with another using
      * [SerialModule.overwriteWith].
      *
@@ -245,3 +244,11 @@ public class SerializersModuleBuilder internal constructor() : SerialModuleColle
     internal fun build(): SerialModule =
         SerialModuleImpl(class2Serializer, polyBase2Serializers, polyBase2NamedSerializers, polyBase2DefaultProvider)
 }
+
+private class SerializerAlreadyRegisteredException internal constructor(msg: String) : IllegalArgumentException(msg) {
+    internal constructor(
+        baseClass: KClass<*>,
+        concreteClass: KClass<*>
+    ) : this("Serializer for $concreteClass already registered in the scope of $baseClass")
+}
+

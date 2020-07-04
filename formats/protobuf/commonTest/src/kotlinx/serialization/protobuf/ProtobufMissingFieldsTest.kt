@@ -14,7 +14,7 @@ class ProtobufMissingFieldsTest {
 
     @Test
     fun testDeserializeAllFields() {
-        val items = ProtoBuf.load(Items.serializer(), buffer)
+        val items = ProtoBuf.decodeFromByteArray(Items.serializer(), buffer)
         assertEquals(25, items.pageSize)
         assertFalse(items.nextPage)
         assertEquals(1, items.items.size)
@@ -26,7 +26,7 @@ class ProtobufMissingFieldsTest {
 
     @Test
     fun testDeserializeSomeTagsAreNotInSchema() {
-        val items = ProtoBuf.load(ItemsWithoutPageSize.serializer(), buffer)
+        val items = ProtoBuf.decodeFromByteArray(ItemsWithoutPageSize.serializer(), buffer)
         assertFalse(items.nextPage)
         assertEquals(1, items.items.size)
         assertEquals(11, items.items[0].id)
@@ -95,20 +95,12 @@ class ProtobufMissingFieldsTest {
         }
 
         override fun deserialize(decoder: Decoder): ItemPlatform {
-            if (decoder is JsonInput) {
-                val str = decoder.decodeString()
-                return ItemPlatform.valueOf(str)
-            }
             val index = decoder.decodeInt()
             return ItemPlatform.values()[index]
         }
 
         override fun serialize(encoder: Encoder, value: ItemPlatform) {
-            if (encoder is JsonOutput) {
-                encoder.encodeString(value.name.toLowerCase())
-            } else {
-                encoder.encodeInt(value.ordinal)
-            }
+            encoder.encodeInt(value.ordinal)
         }
     }
 
@@ -121,20 +113,12 @@ class ProtobufMissingFieldsTest {
         }
 
         override fun deserialize(decoder: Decoder): ItemContext {
-            if (decoder is JsonInput) {
-                val str = decoder.decodeString()
-                return ItemContext.valueOf(str)
-            }
             val index = decoder.decodeInt()
             return ItemContext.values()[index]
         }
 
         override fun serialize(encoder: Encoder, value: ItemContext) {
-            if (encoder is JsonOutput) {
-                encoder.encodeString(value.name.toLowerCase())
-            } else {
-                encoder.encodeInt(value.ordinal)
-            }
+            encoder.encodeInt(value.ordinal)
         }
     }
 }

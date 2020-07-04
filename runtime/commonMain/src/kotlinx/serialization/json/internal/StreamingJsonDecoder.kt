@@ -5,32 +5,33 @@
 package kotlinx.serialization.json.internal
 
 import kotlinx.serialization.*
+import kotlinx.serialization.CompositeDecoder.Companion.UNKNOWN_NAME
 import kotlinx.serialization.builtins.*
 import kotlinx.serialization.json.*
 import kotlinx.serialization.modules.*
 import kotlin.jvm.*
 
 /**
- * [JsonInput] which reads given JSON from [JsonReader] field by field.
+ * [JsonDecoder] which reads given JSON from [JsonReader] field by field.
  */
-internal class StreamingJsonInput internal constructor(
+internal class StreamingJsonDecoder internal constructor(
     public override val json: Json,
     private val mode: WriteMode,
     @JvmField internal val reader: JsonReader
-) : JsonInput, AbstractDecoder() {
+) : JsonDecoder, AbstractDecoder() {
 
     public override val context: SerialModule = json.context
     private var currentIndex = -1
     private val configuration = json.configuration
 
-    // must override public open val updateMode: UpdateMode defined in kotlinx.serialization.json.JsonInput
+    // must override public open val updateMode: UpdateMode defined in kotlinx.serialization.json.JsonDecoder
     // because it inherits many implementations of it
     @Suppress("DEPRECATION")
     @Deprecated(updateModeDeprecated, level = DeprecationLevel.HIDDEN)
     override val updateMode: UpdateMode
         get() = UpdateMode.OVERWRITE
 
-    public override fun decodeJson(): JsonElement = JsonParser(json.configuration, reader).read()
+    public override fun decodeJsonElement(): JsonElement = JsonParser(json.configuration, reader).read()
 
     override fun <T> decodeSerializableValue(deserializer: DeserializationStrategy<T>): T {
         return decodeSerializableValuePolymorphic(deserializer)
@@ -43,13 +44,13 @@ internal class StreamingJsonInput internal constructor(
             reader.nextToken()
         }
         return when (newMode) {
-            WriteMode.LIST, WriteMode.MAP, WriteMode.POLY_OBJ -> StreamingJsonInput(
+            WriteMode.LIST, WriteMode.MAP, WriteMode.POLY_OBJ -> StreamingJsonDecoder(
                 json,
                 newMode,
                 reader
             ) // need fresh cur index
             else -> if (mode == newMode) this else
-                StreamingJsonInput(json, newMode, reader) // todo: reuse instance per mode
+                StreamingJsonDecoder(json, newMode, reader) // todo: reuse instance per mode
         }
     }
 
@@ -108,6 +109,21 @@ internal class StreamingJsonInput internal constructor(
         }
     }
 
+    /*
+     * Checks whether JSON has `null` value for non-null property or unknown enum value for enum property
+     */
+    private fun coerceInputValue(descriptor: SerialDescriptor, index: Int): Boolean {
+        val elementDescriptor = descriptor.getElementDescriptor(index)
+        if (reader.tokenClass == TC_NULL && !elementDescriptor.isNullable) return true // null for non-nullable
+        if (elementDescriptor.kind == UnionKind.ENUM_KIND) {
+            val enumValue = reader.peekString(configuration.isLenient)
+                    ?: return false // if value is not a string, decodeEnum() will throw correct exception
+            val enumIndex = elementDescriptor.getElementIndex(enumValue)
+            if (enumIndex == UNKNOWN_NAME) return true
+        }
+        return false
+    }
+
     private fun decodeObjectIndex(tokenClass: Byte, descriptor: SerialDescriptor): Int {
         if (tokenClass == TC_COMMA && !reader.canBeginValue) {
             reader.fail("Unexpected trailing comma")
@@ -119,11 +135,17 @@ internal class StreamingJsonInput internal constructor(
             reader.requireTokenClass(TC_COLON) { "Expected ':'" }
             reader.nextToken()
             val index = descriptor.getElementIndex(key)
-            if (index != CompositeDecoder.UNKNOWN_NAME) {
-                return index
+            val isUnknown = if (index != UNKNOWN_NAME) {
+                if (configuration.coerceInputValues && coerceInputValue(descriptor, index)) {
+                    false // skip known element
+                } else {
+                    return index // read known element
+                }
+            } else {
+                true // unknown element
             }
 
-            if (!configuration.ignoreUnknownKeys) {
+            if (isUnknown && !configuration.ignoreUnknownKeys) {
                 reader.fail(
                     "Encountered an unknown key '$key'. You can enable 'JsonConfiguration.ignoreUnknownKeys' property" +
                             " to ignore unknown keys"

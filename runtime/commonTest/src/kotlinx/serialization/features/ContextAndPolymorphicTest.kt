@@ -45,7 +45,7 @@ class ContextAndPolymorphicTest {
         }
     }
 
-    private val obj = EnhancedData(Data(100500), Payload("string"), Payload("binary"))
+    private val value = EnhancedData(Data(100500), Payload("string"), Payload("binary"))
     private lateinit var json: Json
 
     @BeforeTest
@@ -53,36 +53,36 @@ class ContextAndPolymorphicTest {
         val scope = serializersModuleOf(Payload::class, PayloadSerializer)
         val bPolymorphicModule = SerializersModule { polymorphic(Any::class) { Payload::class with PayloadSerializer } }
         json = Json(
-            JsonConfiguration(unquotedPrint = true, useArrayPolymorphism = true),
+            JsonConfiguration(useArrayPolymorphism = true),
             context = scope + bPolymorphicModule
         )
     }
 
     @Test
     fun testWriteCustom() {
-        val s = json.stringify(EnhancedData.serializer(), obj)
-        assertEquals("{data:{a:100500,b:42},stringPayload:{s:string},binaryPayload:62696E617279}", s)
+        val s = json.encodeToString(EnhancedData.serializer(), value)
+        assertEquals("""{"data":{"a":100500,"b":42},"stringPayload":{"s":"string"},"binaryPayload":"62696E617279"}""", s)
     }
 
     @Test
     fun testReadCustom() {
-        val s = json.parse(EnhancedData.serializer(),
+        val s = json.decodeFromString(EnhancedData.serializer(),
             """{"data":{"a":100500,"b":42},"stringPayload":{"s":"string"},"binaryPayload":"62696E617279"}""")
-        assertEquals(obj, s)
+        assertEquals(value, s)
     }
 
     @Test
     fun testWriteCustomList() {
-        val s = json.stringify(PayloadList.serializer(), PayloadList(listOf(Payload("1"), Payload("2"))))
-        assertEquals("{ps:[{s:1},{s:2}]}", s)
+        val s = json.encodeToString(PayloadList.serializer(), PayloadList(listOf(Payload("1"), Payload("2"))))
+        assertEquals("""{"ps":[{"s":"1"},{"s":"2"}]}""", s)
     }
 
     @Test
     fun testPolymorphicResolve() {
         val map = mapOf<String, Any>("Payload" to Payload("data"))
         val serializer = MapSerializer(String.serializer(), PolymorphicSerializer(Any::class))
-        val s = json.stringify(serializer, map)
-        assertEquals("""{Payload:[Payload,{s:data}]}""", s)
+        val s = json.encodeToString(serializer, map)
+        assertEquals("""{"Payload":["Payload",{"s":"data"}]}""", s)
     }
 
     @Test
@@ -97,8 +97,8 @@ class ContextAndPolymorphicTest {
         // in json2, Payload would be serialized with BinaryPayloadSerializer
 
         val list = PayloadList(listOf(Payload("string")))
-        assertEquals("""{"ps":[{"s":"string"}]}""", json1.stringify(PayloadList.serializer(), list))
-        assertEquals("""{"ps":["737472696E67"]}""", json2.stringify(PayloadList.serializer(), list))
+        assertEquals("""{"ps":[{"s":"string"}]}""", json1.encodeToString(PayloadList.serializer(), list))
+        assertEquals("""{"ps":["737472696E67"]}""", json2.encodeToString(PayloadList.serializer(), list))
     }
 
     private fun SerialDescriptor.inContext(module: SerialModule): SerialDescriptor = when (kind) {
@@ -123,5 +123,11 @@ class ContextAndPolymorphicTest {
         val resolvedToBinary = contextDesc.inContext(binaryModule)
         assertEquals(PrimitiveKind.STRING, resolvedToBinary.kind)
         assertEquals("BinaryPayload", resolvedToBinary.serialName)
+    }
+
+    @Test
+    fun testContextSerializerUsesDefaultIfModuleIsEmpty() {
+        val s = Json(JsonConfiguration(unquotedPrint = true, useArrayPolymorphism = true)).encodeToString(EnhancedData.serializer(), value)
+        assertEquals("{data:{a:100500,b:42},stringPayload:{s:string},binaryPayload:62696E617279}", s)
     }
 }

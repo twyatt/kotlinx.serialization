@@ -13,9 +13,9 @@ import org.junit.Test
 import java.lang.reflect.*
 import kotlin.test.*
 
-class ResolvingTest {
+class SerializerByTypeTest {
 
-    val unquoted = Json { unquotedPrint = true }
+    val json = Json { }
 
     @Serializable
     data class Box<out T>(val a: T)
@@ -51,8 +51,8 @@ class ResolvingTest {
     fun testGenericParameter() {
         val b = Box(42)
         val serial = serializerByTypeToken(IntBoxToken)
-        val s = unquoted.stringify(serial, b)
-        assertEquals("{a:42}", s)
+        val s = json.encodeToString(serial, b)
+        assertEquals("""{"a":42}""", s)
     }
 
     @Test
@@ -60,8 +60,8 @@ class ResolvingTest {
         val myArr = arrayOf("a", "b", "c")
         val token = myArr::class.java
         val serial = serializerByTypeToken(token)
-        val s = unquoted.stringify(serial, myArr)
-        assertEquals("[a,b,c]", s)
+        val s = json.encodeToString(serial, myArr)
+        assertEquals("""["a","b","c"]""", s)
     }
 
     @Test
@@ -73,8 +73,8 @@ class ResolvingTest {
             override fun getActualTypeArguments(): Array<Type> = arrayOf(String::class.java)
         }
         val serial = serializerByTypeToken(token)
-        val s = unquoted.stringify(serial, myArr)
-        assertEquals("[a,b,c]", s)
+        val s = json.encodeToString(serial, myArr)
+        assertEquals("""["a","b","c"]""", s)
     }
 
 
@@ -83,8 +83,8 @@ class ResolvingTest {
         val myArr = arrayOf("a", "b", "c")
         val token = typeTokenOf<Array<String>>()
         val serial = serializerByTypeToken(token)
-        val s = unquoted.stringify(serial, myArr)
-        assertEquals("[a,b,c]", s)
+        val s = json.encodeToString(serial, myArr)
+        assertEquals("""["a","b","c"]""", s)
     }
 
     @Test
@@ -92,8 +92,8 @@ class ResolvingTest {
         val myList = listOf("a", "b", "c")
         val token = typeTokenOf<List<String>>()
         val serial = serializerByTypeToken(token)
-        val s = unquoted.stringify(serial, myList)
-        assertEquals("[a,b,c]", s)
+        val s = json.encodeToString(serial, myList)
+        assertEquals("""["a","b","c"]""", s)
     }
 
     @Test
@@ -101,8 +101,8 @@ class ResolvingTest {
         val mySet = setOf("a", "b", "c", "c")
         val token = typeTokenOf<Set<String>>()
         val serial = serializerByTypeToken(token)
-        val s = unquoted.stringify(serial, mySet)
-        assertEquals("[a,b,c]", s)
+        val s = json.encodeToString(serial, mySet)
+        assertEquals("""["a","b","c"]""", s)
     }
 
     @Test
@@ -110,8 +110,8 @@ class ResolvingTest {
         val myMap = mapOf("a" to Data(listOf("c"), Box(6)))
         val token = typeTokenOf<Map<String, Data>>()
         val serial = serializerByTypeToken(token)
-        val s = unquoted.stringify(serial, myMap)
-        assertEquals("{a:{l:[c],b:{a:6}}}", s)
+        val s = json.encodeToString(serial, myMap)
+        assertEquals("""{"a":{"l":["c"],"b":{"a":6}}}""", s)
     }
 
     @Test
@@ -119,7 +119,7 @@ class ResolvingTest {
         val myList = listOf(listOf(listOf(1, 2, 3)), listOf())
         val token = typeTokenOf<List<List<List<Int>>>>()
         val serial = serializerByTypeToken(token)
-        val s = unquoted.stringify(serial, myList)
+        val s = json.encodeToString(serial, myList)
         assertEquals("[[[1,2,3]],[]]", s)
     }
 
@@ -128,7 +128,7 @@ class ResolvingTest {
         val myList = arrayOf(arrayOf(arrayOf(1, 2, 3)), arrayOf())
         val token = typeTokenOf<Array<Array<Array<Int>>>>()
         val serial = serializerByTypeToken(token)
-        val s = unquoted.stringify(serial, myList)
+        val s = json.encodeToString(serial, myList)
         assertEquals("[[[1,2,3]],[]]", s)
     }
 
@@ -137,7 +137,7 @@ class ResolvingTest {
         val myList = arrayOf(listOf(arrayOf(1, 2, 3)), listOf())
         val token = typeTokenOf<Array<List<Array<Int>>>>()
         val serial = serializerByTypeToken(token)
-        val s = unquoted.stringify(serial, myList)
+        val s = json.encodeToString(serial, myList)
         assertEquals("[[[1,2,3]],[]]", s)
     }
 
@@ -145,13 +145,13 @@ class ResolvingTest {
     fun testGenericInHolder() {
         val b = Data(listOf("a", "b", "c"), Box(42))
         val serial = serializerByTypeToken(Data::class.java)
-        val s = unquoted.stringify(serial, b)
-        assertEquals("{l:[a,b,c],b:{a:42}}", s)
+        val s = json.encodeToString(serial, b)
+        assertEquals("""{"l":["a","b","c"],"b":{"a":42}}""", s)
     }
 
     @Test
     fun testOverriddenSerializer() {
-        val foo = unquoted.parse<WithCustomDefault>("9")
+        val foo = json.decodeFromString<WithCustomDefault>("9")
         assertEquals(9, foo.n)
     }
 
@@ -159,8 +159,8 @@ class ResolvingTest {
     fun testNamedCompanion() {
         val namedCompanion = WithNamedCompanion(1)
         val serial = serializerByTypeToken(WithNamedCompanion::class.java)
-        val s = unquoted.stringify(serial, namedCompanion)
-        assertEquals("{a:1}", s)
+        val s = json.encodeToString(serial, namedCompanion)
+        assertEquals("""{"a":1}""", s)
     }
 
     @Test
@@ -175,5 +175,11 @@ class ResolvingTest {
         val token = typeTokenOf<SerializableObject>()
         val serial = serializerByTypeToken(token)
         assertEquals(SerializableObject.serializer().descriptor, serial.descriptor)
+    }
+
+    public inline fun <reified T> typeTokenOf(): Type {
+        val base = object : TypeBase<T>() {}
+        val superType = base::class.java.genericSuperclass!!
+        return (superType as ParameterizedType).actualTypeArguments.first()!!
     }
 }

@@ -5,7 +5,6 @@
 package kotlinx.serialization.json
 
 import kotlinx.serialization.*
-import kotlinx.serialization.builtins.*
 import kotlinx.serialization.json.internal.*
 import kotlinx.serialization.modules.*
 import kotlinx.serialization.test.*
@@ -13,84 +12,37 @@ import kotlin.test.*
 
 abstract class JsonTestBase {
     protected val default = Json(JsonConfiguration.Default)
-    protected val unquoted = Json { unquotedPrint = true }
-    protected val unquotedLenient = Json { unquotedPrint = true; isLenient = true; ignoreUnknownKeys = true; serializeSpecialFloatingPointValues = true }
     protected val lenient = Json { isLenient = true; ignoreUnknownKeys = true; serializeSpecialFloatingPointValues = true }
 
-    @ImplicitReflectionSerializer
-    internal inline fun <reified T : Any> Json.stringify(value: T, useStreaming: Boolean): String {
-        val serializer = context.getContextualOrDefault(T::class)
-        return stringify(serializer, value, useStreaming)
+    internal inline fun <reified T : Any> Json.encodeToString(value: T, useStreaming: Boolean): String {
+        val serializer = context.getContextualOrDefault<T>()
+        return encodeToString(serializer, value, useStreaming)
     }
 
-    internal fun <T> Json.stringify(serializer: SerializationStrategy<T>, value: T, useStreaming: Boolean): String {
+    internal fun <T> Json.encodeToString(serializer: SerializationStrategy<T>, value: T, useStreaming: Boolean): String {
         return if (useStreaming) {
-            stringify(serializer, value)
+            encodeToString(serializer, value)
         } else {
             val tree = writeJson(value, serializer)
             // kotlinx.serialization/issues/277
-            stringify(JsonElementSerializer, tree)
+            encodeToString(JsonElementSerializer, tree)
         }
     }
 
-    @ImplicitReflectionSerializer
-    inline fun <reified T : Any> Json.stringify(list: List<T>, useStreaming: Boolean): String {
-        return if (useStreaming) {
-            // Overload to test public list extension
-            stringify(list)
-        } else {
-            stringify(context.getContextualOrDefault(T::class).list, list)
-        }
+    internal inline fun <reified T : Any> Json.decodeFromString(source: String, useStreaming: Boolean): T {
+        val deserializer = context.getContextualOrDefault<T>()
+        return decodeFromString(deserializer, source, useStreaming)
     }
 
-    @ImplicitReflectionSerializer
-    inline fun <reified K : Any, reified V : Any> Json.stringify(map: Map<K, V>, useStreaming: Boolean): String {
+    internal fun <T> Json.decodeFromString(deserializer: DeserializationStrategy<T>, source: String, useStreaming: Boolean): T {
         return if (useStreaming) {
-            // Overload to test public map extension
-            stringify(map)
-        } else {
-            stringify(MapSerializer(context.getContextualOrDefault(K::class), context.getContextualOrDefault(V::class)), map)
-        }
-    }
-
-    @ImplicitReflectionSerializer
-    internal inline fun <reified T : Any> Json.parse(source: String, useStreaming: Boolean): T {
-        val deserializer = context.getContextualOrDefault(T::class)
-        return parse(deserializer, source, useStreaming)
-    }
-
-    internal fun <T> Json.parse(deserializer: DeserializationStrategy<T>, source: String, useStreaming: Boolean): T {
-        return if (useStreaming) {
-            parse(deserializer, source)
+            decodeFromString(deserializer, source)
         } else {
             val parser = JsonReader(source)
-            val input = StreamingJsonInput(this, WriteMode.OBJ, parser)
-            val tree = input.decodeJson()
+            val input = StreamingJsonDecoder(this, WriteMode.OBJ, parser)
+            val tree = input.decodeJsonElement()
             if (!input.reader.isDone) { error("Reader has not consumed the whole input: ${input.reader}") }
             readJson(tree, deserializer)
-        }
-    }
-
-    @ImplicitReflectionSerializer
-    internal inline fun <reified T : Any> Json.parseList(content: String, useStreaming: Boolean): List<T> {
-        return if (useStreaming) {
-            // Overload to test public list extension
-            parseList(content)
-        } else {
-            parse(context.getContextualOrDefault(T::class).list, content, useStreaming)
-        }
-    }
-
-    @ImplicitReflectionSerializer
-    internal inline fun <reified K : Any, reified V : Any> Json.parseMap(
-        content: String,
-        useStreaming: Boolean
-    ): Map<K, V> {
-        return if (useStreaming) {
-            // Overload to test public map extension
-            parseMap(content)
-        } else {
-            parse(MapSerializer(context.getContextualOrDefault(K::class), context.getContextualOrDefault(V::class)), content, useStreaming)
         }
     }
 
@@ -100,23 +52,23 @@ abstract class JsonTestBase {
         processResults(streamingResult, treeResult)
     }
 
-    private inner class DualFormat(
+    private inner class SwitchableJson(
         val json: Json,
         val useStreaming: Boolean,
         override val context: SerialModule = EmptyModule
     ) : StringFormat {
-        override fun <T> stringify(serializer: SerializationStrategy<T>, value: T): String {
-            return json.stringify(serializer, value, useStreaming)
+        override fun <T> encodeToString(serializer: SerializationStrategy<T>, value: T): String {
+            return json.encodeToString(serializer, value, useStreaming)
         }
 
-        override fun <T> parse(deserializer: DeserializationStrategy<T>, string: String): T {
-            return json.parse(deserializer, string, useStreaming)
+        override fun <T> decodeFromString(deserializer: DeserializationStrategy<T>, string: String): T {
+            return json.decodeFromString(deserializer, string, useStreaming)
         }
     }
 
-    protected fun parametrizedTest(json: Json, test: StringFormat.(StringFormat) -> Unit) {
-        val streamingResult = runCatching { json.test(DualFormat(json, true)) }
-        val treeResult = runCatching { json.test(DualFormat(json, false)) }
+    protected fun parametrizedTest(json: Json, test: StringFormat.() -> Unit) {
+        val streamingResult = runCatching { SwitchableJson(json, true).test() }
+        val treeResult = runCatching { SwitchableJson(json, false).test() }
         processResults(streamingResult, treeResult)
     }
 
@@ -139,9 +91,9 @@ abstract class JsonTestBase {
         json: Json = default
     ) {
         parametrizedTest { useStreaming ->
-            val serialized = json.stringify(serializer, data, useStreaming)
+            val serialized = json.encodeToString(serializer, data, useStreaming)
             assertEquals(expected, serialized)
-            val deserialized: T = json.parse(serializer, serialized, useStreaming)
+            val deserialized: T = json.decodeFromString(serializer, serialized, useStreaming)
             assertEquals(data, deserialized)
         }
     }

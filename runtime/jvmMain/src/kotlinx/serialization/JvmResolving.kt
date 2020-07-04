@@ -4,8 +4,8 @@
 
 package kotlinx.serialization
 
-import kotlinx.serialization.internal.*
 import kotlinx.serialization.builtins.*
+import kotlinx.serialization.internal.*
 import java.lang.reflect.*
 import kotlin.reflect.*
 
@@ -19,7 +19,7 @@ internal open class TypeBase<T>
  * Consider using Kotlin's [typeOf] and [KType] since they can
  * also provide information about nullability.
  */
-@Deprecated("Consider using Kotlin type token instead", ReplaceWith("typeOf()"), level = DeprecationLevel.WARNING)
+@Deprecated("Consider using Kotlin type token instead", ReplaceWith("typeOf()"), level = DeprecationLevel.ERROR)
 public inline fun <reified T> typeTokenOf(): Type {
     val base = object : TypeBase<T>() {}
     val superType = base::class.java.genericSuperclass!!
@@ -35,8 +35,9 @@ public inline fun <reified T> typeTokenOf(): Type {
  * Kotlin-specific type information, such as nullability, sealed classes and object.
  */
 @Suppress("UNCHECKED_CAST")
-@OptIn(ImplicitReflectionSerializer::class)
+@OptIn(UnsafeSerializationApi::class)
 public fun serializerByTypeToken(type: Type): KSerializer<Any> = when (type) {
+    // TODO stabilize for Spring
     is GenericArrayType -> {
         val eType = type.genericComponentType.let {
             when (it) {
@@ -53,7 +54,7 @@ public fun serializerByTypeToken(type: Type): KSerializer<Any> = when (type) {
         ArraySerializer(kclass, serializer) as KSerializer<Any>
     }
     is Class<*> -> if (!type.isArray) {
-        requireNotNull<KSerializer<out Any>>((type.kotlin as KClass<Any>).serializer<Any>()) as KSerializer<Any>
+        (type.kotlin as KClass<Any>).serializer<Any>()
     } else {
         val eType: Class<*> = type.componentType
         val s = serializerByTypeToken(eType)
@@ -80,7 +81,7 @@ public fun serializerByTypeToken(type: Type): KSerializer<Any> = when (type) {
                 // since it uses Java TypeToken, not Kotlin one
                 val varargs = args.map { serializerByTypeToken(it) as KSerializer<Any?> }.toTypedArray()
                 (rootClass.kotlin.constructSerializerForGivenTypeArgs(*varargs) as? KSerializer<Any>)
-                        ?: requireNotNull<KSerializer<out Any>>((rootClass.kotlin as KClass<Any>).serializer()) as KSerializer<Any>
+                        ?: (rootClass.kotlin as KClass<Any>).serializer()
             }
         }
     }

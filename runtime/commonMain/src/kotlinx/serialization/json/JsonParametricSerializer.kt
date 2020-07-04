@@ -20,7 +20,7 @@ import kotlin.reflect.*
  * However, sometimes (e.g. when interacting with external API) type property is not present in the input
  * and it is expected to guess the actual type by the shape of JSON, for example by the presence of specific key.
  * [JsonParametricSerializer] provides a skeleton implementation for such strategy. Please note that
- * since JSON content is represented by [JsonElement] class and could be read only with [JsonInput] decoder,
+ * since JSON content is represented by [JsonElement] class and could be read only with [JsonDecoder] decoder,
  * this class works only with [Json] format.
  *
  * Deserialization happens in two stages: first, a value from the input JSON is read
@@ -73,7 +73,7 @@ public abstract class JsonParametricSerializer<T : Any>(private val baseClass: K
     override val descriptor: SerialDescriptor =
         SerialDescriptor("JsonParametricSerializer<${baseClass.simpleName()}>", PolymorphicKind.OPEN)
 
-    @OptIn(ImplicitReflectionSerializer::class)
+    @OptIn(UnsafeSerializationApi::class)
     final override fun serialize(encoder: Encoder, value: T) {
         val actualSerializer =
             encoder.context.getPolymorphic(baseClass, value)
@@ -84,12 +84,12 @@ public abstract class JsonParametricSerializer<T : Any>(private val baseClass: K
     }
 
     final override fun deserialize(decoder: Decoder): T {
-        val input = decoder.asJsonInput()
-        val tree = input.decodeJson()
+        val input = decoder.asJsonDecoder()
+        val tree = input.decodeJsonElement()
 
         @Suppress("UNCHECKED_CAST")
         val actualSerializer = selectSerializer(tree) as KSerializer<T>
-        return input.json.fromJson(actualSerializer, tree)
+        return input.json.decodeFromJsonElement(actualSerializer, tree)
     }
 
     /**
