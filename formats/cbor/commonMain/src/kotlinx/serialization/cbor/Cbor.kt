@@ -28,11 +28,7 @@ import kotlin.experimental.*
  * @param encodeDefaults specifies whether default values of Kotlin properties are encoded.
  */
 
-private const val ADD_DATA_ONE_BYTE = 24
-private const val ADD_DATA_TWO_BYTES = 25
-private const val ADD_DATA_FOUR_BYTES = 26
-private const val ADD_DATA_EIGHT_BYTES = 27
-private const val ADD_DATA_INDEF_LENGTH = 31
+private const val ADDITIONAL_INFORMATION_INDEFINITE_LENGTH = 31
 
 public class Cbor(
     public val encodeDefaults: Boolean = true,
@@ -274,7 +270,6 @@ public class Cbor(
 
     internal class CborDecoder(private val input: ByteArrayInput) {
         private var curByte: Int = -1
-        private var isReadingUnknownLengthByteString = false
 
         init {
             readByte()
@@ -327,45 +322,37 @@ public class Cbor(
 
         fun end() = skipByte(BREAK)
 
+        fun nextByteString(): ByteArray {
+            if ((curByte and 0b111_00000) != HEADER_BYTE_STRING.toInt())
+                throw CborDecodingException("start of byte string", curByte)
+            val arr = readBytes()
+            readByte()
+            return arr
+        }
+
         fun nextString(): String {
             if ((curByte and 0b111_00000) != HEADER_STRING.toInt())
                 throw CborDecodingException("start of string", curByte)
-            val strLen = readNumber().toInt()
-            val arr = input.readExactNBytes(strLen)
+            val arr = readBytes()
             val ans = arr.decodeToString()
             readByte()
             return ans
         }
 
+
+        private fun readBytes(): ByteArray =
+            if (curByte and 0b000_11111 == ADDITIONAL_INFORMATION_INDEFINITE_LENGTH) {
+                readByte()
+                readIndefiniteLengthBytes()
+            } else {
+                val strLen = readNumber().toInt()//.also { println("len $it") }
+                input.readExactNBytes(strLen)//.also { println(it.toHexString()) }
+            }
+
         fun nextNumber(): Long {
             val res = readNumber()
             readByte()
             return res
-        }
-
-        fun nextByteString(): ByteArray {
-            if ((curByte and 0b111_00000) != HEADER_BYTE_STRING.toInt())
-                throw CborDecodingException("start of a ByteString.", curByte)
-
-            val bytesToRead: Long = when (val additionalData = curByte and 0b000_11111) {
-                ADD_DATA_ONE_BYTE -> input.readExact(1)
-                ADD_DATA_TWO_BYTES -> input.readExact(2)
-                ADD_DATA_FOUR_BYTES -> input.readExact(4)
-                ADD_DATA_EIGHT_BYTES -> input.readExact(8)
-                ADD_DATA_INDEF_LENGTH -> -1L
-                else -> additionalData.toLong()
-            }
-
-            val bytes = when (bytesToRead) {
-                -1L -> {
-                    readByte()
-                    readIndefiniteLengthByteString()
-                }
-                else -> input.readBytes(bytesToRead)
-            }
-
-            readByte()
-            return bytes
         }
 
         private fun readNumber(): Long {
@@ -405,19 +392,6 @@ public class Cbor(
             return array
         }
 
-        /**
-         * Reads the specified number of bytes from the input stream and returns a [ByteArray]
-         * containing the read bytes.
-         *
-         * @throws SerializationException if the provided length does not fit in a 32-bit signed [Int].
-         */
-        private fun ByteArrayInput.readBytes(length: Long): ByteArray =
-            if (length > Int.MAX_VALUE) {
-                throw SerializationException("Unsupported length: $length at current byte: $curByte.")
-            } else {
-                readExactNBytes(length.toInt())
-            }
-
         fun nextFloat(): Float {
             if (curByte != NEXT_FLOAT) throw CborDecodingException("float header", curByte)
             val res = Float.fromBits(readInt())
@@ -451,29 +425,16 @@ public class Cbor(
         }
 
         /**
-         * Indefinite-length byte strings contain an unknown number of fixed-length byte strings (chunks).
+         * Indefinite-length byte sequences contain an unknown number of fixed-length byte sequences (chunks).
          *
-         * Chunks should always provide their own lengths; that is, nested, indefinite-length byte strings are not
-         * allowed per the CBOR RFC.
-         *
-         * @return A [ByteArray] containing all of the concatenated byte strings found in the buffer.
-         * @throws CborDecodingException if invoked while already reading an indefinite-length byte string.
+         * @return [ByteArray] containing all of the concatenated bytes found in the buffer.
          */
-        private fun readIndefiniteLengthByteString(): ByteArray {
-            if (isReadingUnknownLengthByteString)
-                throw CborDecodingException("Nested indefinite-length byte string is not allowed", curByte)
-
+        private fun readIndefiniteLengthBytes(): ByteArray {
             val byteStrings = mutableListOf<ByteArray>()
-
-            try {
-                isReadingUnknownLengthByteString = true
-                do {
-                    byteStrings.add(nextByteString())
-                } while (!isEnd())
-            } finally {
-                isReadingUnknownLengthByteString = false
-            }
-
+            do {
+                byteStrings.add(readBytes())
+                readByte()
+            } while (!isEnd())
             return byteStrings.flatten()
         }
     }
