@@ -345,8 +345,8 @@ public class Cbor(
                 readByte()
                 readIndefiniteLengthBytes()
             } else {
-                val strLen = readNumber().toInt()//.also { println("len $it") }
-                input.readExactNBytes(strLen)//.also { println(it.toHexString()) }
+                val strLen = readNumber().toInt()
+                input.readExactNBytes(strLen)
             }
 
         fun nextNumber(): Long {
