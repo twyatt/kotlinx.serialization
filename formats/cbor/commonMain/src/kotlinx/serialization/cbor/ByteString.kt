@@ -11,9 +11,9 @@ import kotlinx.serialization.SerialInfo
  * @Serializable
  * data class Data(
  *     @ByteString
- *     val a: ByteArray // CBOR major type 2: a byte string.
+ *     val a: ByteArray, // CBOR major type 2: a byte string.
  *
- *     val b: ByteArray // CBOR major type 4: an array of data items.
+ *     val b: ByteArray  // CBOR major type 4: an array of data items.
  * )
  * ```
  *
