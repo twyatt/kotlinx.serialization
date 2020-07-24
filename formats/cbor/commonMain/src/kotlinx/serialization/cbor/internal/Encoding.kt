@@ -51,7 +51,7 @@ internal open class CborWriter(private val cbor: Cbor, protected val encoder: Cb
     private var encodeByteArrayAsByteString = false
 
     override fun <T> encodeSerializableValue(serializer: SerializationStrategy<T>, value: T) {
-        if (serializer.descriptor == ByteArraySerializer().descriptor && encodeByteArrayAsByteString) {
+        if (encodeByteArrayAsByteString && serializer.descriptor == ByteArraySerializer().descriptor) {
             encoder.encodeByteString(value as ByteArray)
         } else {
             super.encodeSerializableValue(serializer, value)
@@ -236,7 +236,7 @@ internal open class CborReader(private val cbor: Cbor, protected val decoder: Cb
     }
 
     override fun <T> decodeSerializableValue(deserializer: DeserializationStrategy<T>): T {
-        return if (deserializer.descriptor == ByteArraySerializer().descriptor && decodeByteArrayAsByteString) {
+        return if (decodeByteArrayAsByteString && deserializer.descriptor == ByteArraySerializer().descriptor) {
             decoder.nextByteString() as T
         } else {
             super.decodeSerializableValue(deserializer)
