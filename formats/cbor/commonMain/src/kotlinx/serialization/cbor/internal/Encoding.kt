@@ -236,7 +236,7 @@ internal open class CborReader(private val cbor: Cbor, protected val decoder: Cb
     }
 
     override fun <T> decodeSerializableValue(deserializer: DeserializationStrategy<T>): T {
-        return if (deserializer.descriptor.kind is StructureKind.LIST && decodeByteArrayAsByteString) {
+        return if (deserializer.descriptor == ByteArraySerializer().descriptor && decodeByteArrayAsByteString) {
             decoder.nextByteString() as T
         } else {
             super.decodeSerializableValue(deserializer)
