@@ -8,6 +8,9 @@
 package kotlinx.serialization
 
 import kotlinx.serialization.builtins.*
+import kotlinx.serialization.builtins.MapEntrySerializer
+import kotlinx.serialization.builtins.TripleSerializer
+import kotlinx.serialization.builtins.PairSerializer
 import kotlinx.serialization.internal.*
 import kotlin.jvm.*
 import kotlin.reflect.*
@@ -41,9 +44,8 @@ public inline fun <reified T> serializer(): KSerializer<T> {
 public fun serializer(type: KType): KSerializer<Any?> {
     fun serializerByKTypeImpl(type: KType): KSerializer<Any> {
         val rootClass = type.kclass()
-
         val typeArguments = type.arguments
-            .map { requireNotNull(it.type) { "Star projections are not allowed, had $it instead" } }
+            .map { requireNotNull(it.type) { "Star projections in type arguments are not allowed, but had $type" } }
         return when {
             typeArguments.isEmpty() -> rootClass.serializer()
             else -> {

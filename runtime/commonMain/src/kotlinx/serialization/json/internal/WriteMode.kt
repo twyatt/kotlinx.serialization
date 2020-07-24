@@ -4,7 +4,7 @@
 
 package kotlinx.serialization.json.internal
 
-import kotlinx.serialization.*
+import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.InvalidKeyKindException
 import kotlin.jvm.JvmField
@@ -36,7 +36,7 @@ internal inline fun <T, R1 : T, R2 : T> Json.selectMapMode(
 ): T {
     val keyDescriptor = mapDescriptor.getElementDescriptor(0)
     val keyKind = keyDescriptor.kind
-    return if (keyKind is PrimitiveKind || keyKind == UnionKind.ENUM_KIND) {
+    return if (keyKind is PrimitiveKind || keyKind == SerialKind.ENUM) {
         ifMap()
     } else if (configuration.allowStructuredMapKeys) {
         ifList()

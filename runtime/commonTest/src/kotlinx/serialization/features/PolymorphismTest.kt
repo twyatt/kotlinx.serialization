@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
+ * Copyright 2017-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
  */
 
 package kotlinx.serialization.features
@@ -17,14 +17,14 @@ class PolymorphismTest : JsonTestBase() {
         @Id(2) @Polymorphic val polyBase2: PolyBase
     )
 
-    private val module: SerialModule = BaseAndDerivedModule + SerializersModule {
+    private val module: SerializersModule = BaseAndDerivedModule + SerializersModule {
         polymorphic(
             PolyDerived::class,
             PolyDerived.serializer()
         )
     }
 
-    private val json = Json { useArrayPolymorphism = true; serialModule = module }
+    private val json = Json { useArrayPolymorphism = true; serializersModule = module }
 
     @Test
     fun testInheritanceJson() = parametrizedTest { useStreaming ->
@@ -46,19 +46,17 @@ class PolymorphismTest : JsonTestBase() {
         assertEquals("""["kotlinx.serialization.PolyDerived",{"id":1,"s":"b"}]""", s)
     }
 
-    object PolyDefaultSerializer : JsonTransformingSerializer<PolyDefault>(PolyDefault.serializer(), "foo") {
-        override fun readTransform(element: JsonElement): JsonElement {
-            return buildJsonObject {
-                put("json", JsonObject(element.jsonObject.filterKeys { it != "type" }))
-                put("id", 42)
-            }
+    object PolyDefaultSerializer : JsonTransformingSerializer<PolyDefault>(PolyDefault.serializer()) {
+        override fun transformDeserialize(element: JsonElement): JsonElement = buildJsonObject {
+            put("json", JsonObject(element.jsonObject.filterKeys { it != "type" }))
+            put("id", 42)
         }
     }
 
     @Test
     fun testDefaultSerializer() = parametrizedTest { useStreaming ->
         val withDefault = module + SerializersModule {
-            defaultPolymorphic(PolyBase::class) { name ->
+            polymorphicDefault(PolyBase::class) { name ->
                 if (name == "foo") {
                     PolyDefaultSerializer
                 } else {
@@ -67,7 +65,7 @@ class PolymorphismTest : JsonTestBase() {
             }
         }
 
-        val adjustedJson = Json(json.configuration.copy(useArrayPolymorphism = false), withDefault)
+        val adjustedJson = Json { serializersModule = withDefault }
         val string = """
             {"polyBase1":{"type":"kotlinx.serialization.PolyBase","id":239},
             "polyBase2":{"type":"foo","key":42}}""".trimIndent()

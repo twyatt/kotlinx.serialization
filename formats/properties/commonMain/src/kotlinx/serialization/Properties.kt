@@ -4,7 +4,8 @@
 
 package kotlinx.serialization
 
-import kotlinx.serialization.CompositeDecoder.Companion.READ_DONE
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
 import kotlinx.serialization.internal.*
 import kotlinx.serialization.modules.*
 
@@ -33,13 +34,13 @@ import kotlinx.serialization.modules.*
  * Additional `l.size` property with a list size would be added.
  * [Map] is treated as a [key,value,...] list.
  *
- * @param context A [SerialModule] which should contain registered serializers
- * for [ContextualSerialization] and [Polymorphic] serialization, if you have any.
+ * @param serializersModule A [SerializersModule] which should contain registered serializers
+ * for [Contextual] and [Polymorphic] serialization, if you have any.
  */
-public class Properties(override val context: SerialModule = EmptyModule) : SerialFormat {
+public class Properties(override val serializersModule: SerializersModule = EmptySerializersModule) : SerialFormat {
 
     private inner class OutMapper : NamedValueEncoder() {
-        override val context: SerialModule = this@Properties.context
+        override val serializersModule: SerializersModule = this@Properties.serializersModule
 
         internal val map: MutableMap<String, Any> = mutableMapOf()
 
@@ -61,10 +62,14 @@ public class Properties(override val context: SerialModule = EmptyModule) : Seri
         override fun encodeTaggedNull(tag: String) {
             // ignore nulls in output
         }
+
+        override fun encodeTaggedEnum(tag: String, enumDescriptor: SerialDescriptor, ordinal: Int) {
+            map[tag] = enumDescriptor.getElementName(ordinal)
+        }
     }
 
     private inner class OutNullableMapper : NamedValueEncoder() {
-        override val context: SerialModule = this@Properties.context
+        override val serializersModule: SerializersModule = this@Properties.serializersModule
 
         internal val map: MutableMap<String, Any?> = mutableMapOf()
 
@@ -81,13 +86,17 @@ public class Properties(override val context: SerialModule = EmptyModule) : Seri
             map[tag] = value
         }
 
+        override fun encodeTaggedEnum(tag: String, enumDescriptor: SerialDescriptor, ordinal: Int) {
+            map[tag] = enumDescriptor.getElementName(ordinal)
+        }
+
         override fun encodeTaggedNull(tag: String) {
             map[tag] = null
         }
     }
 
     private inner class InMapper(private val map: Map<String, Any>) : NamedValueDecoder() {
-        override val context: SerialModule = this@Properties.context
+        override val serializersModule: SerializersModule = this@Properties.serializersModule
 
         private var currentIndex = 0
 
@@ -103,10 +112,10 @@ public class Properties(override val context: SerialModule = EmptyModule) : Seri
             return map.getValue(tag)
         }
 
-        override fun decodeTaggedEnum(tag: String, enumDescription: SerialDescriptor): Int {
+        override fun decodeTaggedEnum(tag: String, enumDescriptor: SerialDescriptor): Int {
             return when (val taggedValue = map.getValue(tag)) {
                 is Int -> taggedValue
-                is String -> enumDescription.getElementIndex(taggedValue)
+                is String -> enumDescriptor.getElementIndex(taggedValue)
                 else -> throw SerializationException("Value of enum entry '$tag' is neither an Int nor a String")
             }
         }
@@ -118,12 +127,12 @@ public class Properties(override val context: SerialModule = EmptyModule) : Seri
                 val name = descriptor.getTag(currentIndex++)
                 if (map.keys.any { it.startsWith(name) }) return currentIndex - 1
             }
-            return READ_DONE
+            return CompositeDecoder.DECODE_DONE
         }
     }
 
     private inner class InNullableMapper(val map: Map<String, Any?>) : NamedValueDecoder() {
-        override val context: SerialModule = this@Properties.context
+        override val serializersModule: SerializersModule = this@Properties.serializersModule
 
         private var currentIndex = 0
 
@@ -142,15 +151,15 @@ public class Properties(override val context: SerialModule = EmptyModule) : Seri
                 val name = descriptor.getTag(currentIndex++)
                 if (map.keys.any { it.startsWith(name) }) return currentIndex - 1
             }
-            return READ_DONE
+            return CompositeDecoder.DECODE_DONE
         }
 
         override fun decodeTaggedValue(tag: String): Any = map.getValue(tag)!!
 
-        override fun decodeTaggedEnum(tag: String, enumDescription: SerialDescriptor): Int {
+        override fun decodeTaggedEnum(tag: String, enumDescriptor: SerialDescriptor): Int {
             return when (val taggedValue = map.getValue(tag)!!) {
                 is Int -> taggedValue
-                is String -> enumDescription.getElementIndex(taggedValue)
+                is String -> enumDescriptor.getElementIndex(taggedValue)
                 else -> throw SerializationException("Value of enum entry '$tag' is neither an Int nor a String")
             }
         }
@@ -169,7 +178,7 @@ public class Properties(override val context: SerialModule = EmptyModule) : Seri
      */
     public fun <T> store(strategy: SerializationStrategy<T>, value: T): Map<String, Any> {
         val m = OutMapper()
-        m.encode(strategy, value)
+        m.encodeSerializableValue(strategy, value)
         return m.map
     }
 
@@ -179,7 +188,7 @@ public class Properties(override val context: SerialModule = EmptyModule) : Seri
      */
     public fun <T> storeNullable(strategy: SerializationStrategy<T>, value: T): Map<String, Any?> {
         val m = OutNullableMapper()
-        m.encode(strategy, value)
+        m.encodeSerializableValue(strategy, value)
         return m.map
     }
 
@@ -189,7 +198,7 @@ public class Properties(override val context: SerialModule = EmptyModule) : Seri
      */
     public fun <T> load(strategy: DeserializationStrategy<T>, map: Map<String, Any>): T {
         val m = InMapper(map)
-        return m.decode(strategy)
+        return m.decodeSerializableValue(strategy)
     }
 
     /**
@@ -198,68 +207,68 @@ public class Properties(override val context: SerialModule = EmptyModule) : Seri
      */
     public fun <T> loadNullable(strategy: DeserializationStrategy<T>, map: Map<String, Any?>): T {
         val m = InNullableMapper(map)
-        return m.decode(strategy)
+        return m.decodeSerializableValue(strategy)
     }
 
     /**
      * A reified version of [store].
      */
     public inline fun <reified T : Any> store(value: T): Map<String, Any> =
-        store(context.getContextualOrDefault(), value)
+        store(serializersModule.getContextualOrDefault(), value)
 
     /**
      * A reified version of [storeNullable].
      */
     public inline fun <reified T : Any> storeNullable(value: T): Map<String, Any?> =
-        storeNullable(context.getContextualOrDefault(), value)
+        storeNullable(serializersModule.getContextualOrDefault(), value)
 
     /**
      * A reified version of [load].
      */
     public inline fun <reified T : Any> load(map: Map<String, Any>): T =
-        load(context.getContextualOrDefault(), map)
+        load(serializersModule.getContextualOrDefault(), map)
 
     /**
      * A reified version of [loadNullable].
      */
     public inline fun <reified T : Any> loadNullable(map: Map<String, Any?>): T =
-        loadNullable(context.getContextualOrDefault(), map)
+        loadNullable(serializersModule.getContextualOrDefault(), map)
 
     /**
-     * A top-level [SerialFormat] instance that mimic an instance of [Properties] and does not have any [SerialModule] installed.
+     * A top-level [SerialFormat] instance that mimic an instance of [Properties] and does not have any [SerializersModule] installed.
      */
     public companion object Default : SerialFormat {
 
-        override val context: SerialModule
-            get() = DEFAULT.context
+        override val serializersModule: SerializersModule
+            get() = DEFAULT.serializersModule
 
         @PublishedApi
         internal val DEFAULT: Properties = Properties()
 
         /**
          * Shorthand for [Properties.store] call on a [DEFAULT] instance of [Properties], which
-         * does not have any [SerialModule]s installed.
+         * does not have any [SerializersModule]s installed.
          */
         public fun <T> store(strategy: SerializationStrategy<T>, value: T): Map<String, Any> =
             DEFAULT.store(strategy, value)
 
         /**
          * Shorthand for [Properties.storeNullable] call on a [DEFAULT] instance of [Properties], which
-         * does not have any [SerialModule]s installed.
+         * does not have any [SerializersModule]s installed.
          */
         public fun <T> storeNullable(strategy: SerializationStrategy<T>, value: T): Map<String, Any?> =
             DEFAULT.storeNullable(strategy, value)
 
         /**
          * Shorthand for [Properties.load] call on a [DEFAULT] instance of [Properties], which
-         * does not have any [SerialModule]s installed.
+         * does not have any [SerializersModule]s installed.
          */
         public fun <T> load(strategy: DeserializationStrategy<T>, map: Map<String, Any>): T =
             DEFAULT.load(strategy, map)
 
         /**
          * Shorthand for [Properties.loadNullable] call on a [DEFAULT] instance of [Properties], which
-         * does not have any [SerialModule]s installed.
+         * does not have any [SerializersModule]s installed.
          */
         public fun <T> loadNullable(strategy: DeserializationStrategy<T>, map: Map<String, Any?>): T =
             DEFAULT.loadNullable(strategy, map)

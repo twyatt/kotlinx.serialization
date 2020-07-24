@@ -11,11 +11,11 @@ import kotlinx.serialization.test.*
 import kotlin.test.*
 
 abstract class JsonTestBase {
-    protected val default = Json(JsonConfiguration.Default)
-    protected val lenient = Json { isLenient = true; ignoreUnknownKeys = true; serializeSpecialFloatingPointValues = true }
+    protected val default = Json
+    protected val lenient = Json { isLenient = true; ignoreUnknownKeys = true; allowSpecialFloatingPointValues = true }
 
     internal inline fun <reified T : Any> Json.encodeToString(value: T, useStreaming: Boolean): String {
-        val serializer = context.getContextualOrDefault<T>()
+        val serializer = serializersModule.getContextualOrDefault<T>()
         return encodeToString(serializer, value, useStreaming)
     }
 
@@ -24,13 +24,12 @@ abstract class JsonTestBase {
             encodeToString(serializer, value)
         } else {
             val tree = writeJson(value, serializer)
-            // kotlinx.serialization/issues/277
-            encodeToString(JsonElementSerializer, tree)
+            encodeToString(tree)
         }
     }
 
     internal inline fun <reified T : Any> Json.decodeFromString(source: String, useStreaming: Boolean): T {
-        val deserializer = context.getContextualOrDefault<T>()
+        val deserializer = serializersModule.getContextualOrDefault<T>()
         return decodeFromString(deserializer, source, useStreaming)
     }
 
@@ -55,7 +54,7 @@ abstract class JsonTestBase {
     private inner class SwitchableJson(
         val json: Json,
         val useStreaming: Boolean,
-        override val context: SerialModule = EmptyModule
+        override val serializersModule: SerializersModule = EmptySerializersModule
     ) : StringFormat {
         override fun <T> encodeToString(serializer: SerializationStrategy<T>, value: T): String {
             return json.encodeToString(serializer, value, useStreaming)

@@ -5,13 +5,15 @@
 package kotlinx.serialization
 
 import kotlinx.serialization.builtins.*
+import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.*
 import kotlinx.serialization.internal.*
 import kotlinx.serialization.modules.*
 import kotlin.internal.*
 import kotlin.reflect.*
 
-private fun noImpl(): Nothing = throw UnsupportedOperationException("Not implemented, should not be called")
+@PublishedApi
+internal fun noImpl(): Nothing = throw UnsupportedOperationException("Not implemented, should not be called")
 
 @Deprecated(
     message = "Deprecated in the favour of PrimitiveDescriptor factory function",
@@ -99,19 +101,19 @@ public class Mapper()
 @SerialInfo
 @Target(AnnotationTarget.PROPERTY)
 @Deprecated(
-    message = "SerialId is renamed to ProtoId to better reflect its semantics and extracted to separate artifact kotlinx-serialization-protobuf",
-    level = DeprecationLevel.ERROR, replaceWith = ReplaceWith("ProtoId", imports = ["kotlinx.serialization.protobuf.*"])
+    message = "SerialId is renamed to ProtoNumber to better reflect its semantics and extracted to separate artifact kotlinx-serialization-protobuf",
+    level = DeprecationLevel.ERROR, replaceWith = ReplaceWith("ProtoNumber", imports = ["kotlinx.serialization.protobuf.*"])
 )
 public annotation class SerialId @Deprecated(
     message = "SerialId is renamed to ProtoId to better reflect its semantics and extracted to separate artifact kotlinx-serialization-protobuf",
     level = DeprecationLevel.ERROR,
-    replaceWith = ReplaceWith("ProtoId(id)", imports = ["kotlinx.serialization.protobuf.*"])
+    replaceWith = ReplaceWith("ProtoNumber(id)", imports = ["kotlinx.serialization.protobuf.*"])
 ) constructor(public val id: Int)
 
 
 @Deprecated(level = DeprecationLevel.WARNING, message = "Use default parse overload instead", replaceWith = ReplaceWith("parse(objects)"))
 public inline fun <reified T : Any> StringFormat.parseList(objects: String): List<T> =
-    decodeFromString(ListSerializer(context.getContextualOrDefault<T>()), objects)
+    decodeFromString(ListSerializer(serializersModule.getContextualOrDefault<T>()), objects)
 
 @Deprecated(
     level = DeprecationLevel.WARNING,
@@ -119,7 +121,7 @@ public inline fun <reified T : Any> StringFormat.parseList(objects: String): Lis
     replaceWith = ReplaceWith("decodeFromString(map)")
 )
 public inline fun <reified K : Any, reified V : Any> StringFormat.parseMap(map: String): Map<K, V> =
-    decodeFromString(MapSerializer(context.getContextualOrDefault<K>(), context.getContextualOrDefault<V>()), map)
+    decodeFromString(MapSerializer(serializersModule.getContextualOrDefault<K>(), serializersModule.getContextualOrDefault<V>()), map)
 
 // ERROR migrations that affect **only** users that called these functions with named parameters
 
@@ -130,7 +132,7 @@ public inline fun <reified K : Any, reified V : Any> StringFormat.parseMap(map: 
     replaceWith = ReplaceWith("encodeToString(objects)")
 )
 public inline fun <reified T : Any> StringFormat.stringify(objects: List<T>): String =
-    encodeToString(ListSerializer(context.getContextualOrDefault<T>()), objects)
+    encodeToString(ListSerializer(serializersModule.getContextualOrDefault<T>()), objects)
 
 @LowPriorityInOverloadResolution
 @Deprecated(
@@ -139,7 +141,7 @@ public inline fun <reified T : Any> StringFormat.stringify(objects: List<T>): St
     replaceWith = ReplaceWith("stringify(map)")
 )
 public inline fun <reified K : Any, reified V : Any> StringFormat.stringify(map: Map<K, V>): String =
-    encodeToString(MapSerializer(context.getContextualOrDefault<K>(), context.getContextualOrDefault<V>()), map)
+    encodeToString(MapSerializer(serializersModule.getContextualOrDefault<K>(), serializersModule.getContextualOrDefault<V>()), map)
 
 @ImplicitReflectionSerializer
 @OptIn(UnsafeSerializationApi::class)
@@ -148,7 +150,7 @@ public inline fun <reified K : Any, reified V : Any> StringFormat.stringify(map:
     message = "This method is deprecated for removal. Please use reified getContextualOrDefault<T>() instead",
     replaceWith = ReplaceWith("getContextual(klass) ?: klass.serializer()")
 )
-public fun <T : Any> SerialModule.getContextualOrDefault(klass: KClass<T>): KSerializer<T> =
+public fun <T : Any> SerializersModule.getContextualOrDefault(klass: KClass<T>): KSerializer<T> =
     getContextual(klass) ?: klass.serializer()
 
 @ImplicitReflectionSerializer
@@ -158,8 +160,8 @@ public fun <T : Any> SerialModule.getContextualOrDefault(klass: KClass<T>): KSer
     message = "This method is deprecated for removal. Please use reified getContextualOrDefault<T>() instead",
     replaceWith = ReplaceWith("getContextualOrDefault<T>()")
 )
-public fun <T : Any> SerialModule.getContextualOrDefault(value: T): KSerializer<T> =
-    getContextual(value) ?: value::class.serializer().cast()
+public fun <T : Any> SerializersModule.getContextualOrDefault(value: T): KSerializer<T> =
+    getContextual(value::class)?.cast() ?: value::class.serializer().cast()
 
 @Suppress("UNUSED", "DeprecatedCallableAddReplaceWith")
 @Deprecated(
@@ -173,7 +175,7 @@ public val PolymorphicClassDescriptor: SerialDescriptor
     "Deprecated for removal since it is indistinguishable from SerialFormat interface. " +
             "Use SerialFormat instead.", ReplaceWith("SerialFormat"), DeprecationLevel.ERROR
 )
-public abstract class AbstractSerialFormat(override val context: SerialModule) : SerialFormat
+public abstract class AbstractSerialFormat(override val serializersModule: SerializersModule) : SerialFormat
 
 @Deprecated(
     "This method was renamed to encodeToString during serialization 1.0 stabilization",
@@ -246,3 +248,101 @@ public fun <T : Any> BinaryFormat.load(raw: ByteArray): T = noImpl()
     ReplaceWith("decodeFromHexString<T>(hex)"), DeprecationLevel.ERROR
 )
 public fun <T : Any> BinaryFormat.loads(hex: String): T = noImpl()
+
+@Deprecated(
+    "This method was deprecated during serialization 1.0 API stabilization",
+    ReplaceWith("decodeSerializableValue(deserializer)"), DeprecationLevel.ERROR
+) // TODO make internal when migrations are removed
+public fun <T : Any?> Decoder.decode(deserializer: DeserializationStrategy<T>): T = noImpl()
+
+@Deprecated(
+    "This method was deprecated during serialization 1.0 API stabilization",
+    ReplaceWith("decodeSerializableValue<T>(serializer())"), DeprecationLevel.ERROR
+) // TODO make internal when migrations are removed
+public fun <T : Any> Decoder.decode(): T = noImpl()
+
+@Deprecated(
+    "This method was deprecated during serialization 1.0 API stabilization",
+    ReplaceWith("encodeSerializableValue(strategy, value)"), DeprecationLevel.ERROR
+) // TODO make internal when migrations are removed
+public fun <T : Any?> Encoder.encode(strategy: SerializationStrategy<T>, value: T): Unit = noImpl()
+
+@Deprecated(
+    "This method was deprecated during serialization 1.0 API stabilization",
+    ReplaceWith("encodeSerializableValue<T>(serializer(), value)"), DeprecationLevel.ERROR
+) // TODO make internal when migrations are removed
+public fun <T : Any> Encoder.encode(obj: T): Unit = noImpl()
+
+@Deprecated(
+    "This method was renamed to buildClassSerialDescriptor during serialization 1.0 API stabilization",
+    replaceWith = ReplaceWith(
+        "buildClassSerialDescriptor(serialName, *typeParameters, builderAction)",
+        imports = ["kotlinx.serialization.descriptors.buildClassSerialDescriptor"]
+    ),
+    DeprecationLevel.ERROR
+)
+public fun SerialDescriptor(
+    serialName: String,
+    vararg typeParameters: SerialDescriptor,
+    builderAction: ClassSerialDescriptorBuilder.() -> Unit = {}
+): SerialDescriptor = noImpl()
+
+@Deprecated(
+    "Builder with SerialKind was deprecated during serialization 1.0 API stabilization. ",
+    replaceWith = ReplaceWith(
+        "buildSerialDescriptor(serialName, kind, *typeParameters, builderAction)",
+        imports = ["kotlinx.serialization.descriptors.buildSerialDescriptor"]
+    ),
+    DeprecationLevel.ERROR
+)
+public fun SerialDescriptor(
+    serialName: String,
+    kind: SerialKind,
+    vararg typeParameters: SerialDescriptor,
+    builderAction: ClassSerialDescriptorBuilder.() -> Unit = {}
+): SerialDescriptor = noImpl()
+
+@Deprecated(
+    "This method was renamed to PrimitiveSerialDescriptor during serialization 1.0 API stabilization",
+    ReplaceWith(
+        "PrimitiveSerialDescriptor(serialName, kind)",
+        imports = ["kotlinx.serialization.descriptors.PrimitiveSerialDescriptor"]
+    ),
+    DeprecationLevel.ERROR
+)
+public fun PrimitiveDescriptor(serialName: String, kind: PrimitiveKind): SerialDescriptor = noImpl()
+
+@Deprecated(
+    "This property was renamed to serializersModule during serialization 1.0 stabilization",
+    ReplaceWith("serializersModule"), DeprecationLevel.ERROR
+)
+public val SerialFormat.context: SerializersModule
+    get() = noImpl()
+
+@Deprecated(
+    "This method was replaced with property during serialization 1.0 stabilization",
+    ReplaceWith("elementDescriptors.toList()",
+        imports = ["kotlinx.serialization.descriptors.elementNames"]
+    ), DeprecationLevel.ERROR
+)
+public fun SerialDescriptor.elementDescriptors(): List<SerialDescriptor> = noImpl()
+
+@Deprecated(
+    "This method was replaced with property during serialization 1.0 stabilization",
+    ReplaceWith(
+        "elementNames.toList()",
+        imports = ["kotlinx.serialization.descriptors.elementNames"]
+    ), DeprecationLevel.ERROR
+)
+public fun SerialDescriptor.elementNames(): List<String> = noImpl()
+
+
+@RequiresOptIn
+@Deprecated(level = DeprecationLevel.ERROR, message = "This annotation is obsolete and deprecated for removal")
+public annotation class ImplicitReflectionSerializer
+
+@RequiresOptIn(level = RequiresOptIn.Level.WARNING)
+@Deprecated(
+    level = DeprecationLevel.ERROR,
+    message = "Deprecated for removal during serialization 1.0 API stabilization")
+public annotation class UnstableDefault

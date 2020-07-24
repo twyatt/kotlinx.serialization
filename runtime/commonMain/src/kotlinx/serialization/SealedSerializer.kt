@@ -5,6 +5,8 @@
 package kotlinx.serialization
 
 import kotlinx.serialization.builtins.*
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
 import kotlinx.serialization.internal.*
 import kotlinx.serialization.modules.*
 import kotlin.reflect.*
@@ -58,26 +60,26 @@ import kotlin.reflect.*
  *
  * ```
  * val abstractContext = SerializersModule {
- *     polymorphic(ProtocolWithAbstractClass::class, ProtocolWithAbstractClass.Message::class) {
- *         subclass<ProtocolWithAbstractClass.Message.IntMessage>()
- *         subclass<ProtocolWithAbstractClass.Message.StringMessage>()
+ *     polymorphic(ProtocolWithAbstractClass::class) {
+ *         subclass(ProtocolWithAbstractClass.Message.IntMessage::class)
+ *         subclass(ProtocolWithAbstractClass.Message.StringMessage::class)
  *         // no need to register ProtocolWithAbstractClass.ErrorMessage
  *     }
  * }
  * ```
  */
-@InternalSerializationApi
-public class SealedClassSerializer<T : Any>(
+@PublishedApi
+internal class SealedClassSerializer<T : Any>(
     serialName: String,
     override val baseClass: KClass<T>,
     subclasses: Array<KClass<out T>>,
     subclassSerializers: Array<KSerializer<out T>>
 ) : AbstractPolymorphicSerializer<T>() {
 
-    override val descriptor: SerialDescriptor = SerialDescriptor(serialName, PolymorphicKind.SEALED) {
+    override val descriptor: SerialDescriptor = buildSerialDescriptor(serialName, PolymorphicKind.SEALED) {
         element("type", String.serializer().descriptor)
         val elementDescriptor =
-            SerialDescriptor("kotlinx.serialization.Sealed<${baseClass.simpleName}>", UnionKind.CONTEXTUAL) {
+            buildSerialDescriptor("kotlinx.serialization.Sealed<${baseClass.simpleName}>", SerialKind.CONTEXTUAL) {
                 subclassSerializers.forEach {
                     val d = it.descriptor
                     element(d.serialName, d)

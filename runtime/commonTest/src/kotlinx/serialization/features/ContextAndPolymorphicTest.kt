@@ -6,6 +6,9 @@ package kotlinx.serialization.features
 
 import kotlinx.serialization.*
 import kotlinx.serialization.builtins.*
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.*
 import kotlinx.serialization.internal.*
 import kotlinx.serialization.json.*
 import kotlinx.serialization.modules.*
@@ -19,7 +22,7 @@ class ContextAndPolymorphicTest {
     @Serializable
     data class EnhancedData(
         val data: Data,
-        @ContextualSerialization val stringPayload: Payload,
+        @Contextual val stringPayload: Payload,
         @Serializable(with = BinaryPayloadSerializer::class) val binaryPayload: Payload
     )
 
@@ -28,13 +31,13 @@ class ContextAndPolymorphicTest {
     data class Payload(val s: String)
 
     @Serializable
-    data class PayloadList(val ps: List<@ContextualSerialization Payload>)
+    data class PayloadList(val ps: List<@Contextual Payload>)
 
     @Serializer(forClass = Payload::class)
     object PayloadSerializer
 
     object BinaryPayloadSerializer : KSerializer<Payload> {
-        override val descriptor: SerialDescriptor = PrimitiveDescriptor("BinaryPayload", PrimitiveKind.STRING)
+        override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("BinaryPayload", PrimitiveKind.STRING)
 
         override fun serialize(encoder: Encoder, value: Payload) {
             encoder.encodeString(InternalHexConverter.printHexBinary(value.s.encodeToByteArray()))
@@ -51,11 +54,11 @@ class ContextAndPolymorphicTest {
     @BeforeTest
     fun initContext() {
         val scope = serializersModuleOf(Payload::class, PayloadSerializer)
-        val bPolymorphicModule = SerializersModule { polymorphic(Any::class) { Payload::class with PayloadSerializer } }
-        json = Json(
-            JsonConfiguration(useArrayPolymorphism = true),
-            context = scope + bPolymorphicModule
-        )
+        val bPolymorphicModule = SerializersModule { polymorphic(Any::class) { subclass(PayloadSerializer) } }
+        json = Json {
+            useArrayPolymorphism = true
+            serializersModule = scope + bPolymorphicModule
+        }
     }
 
     @Test
@@ -87,11 +90,11 @@ class ContextAndPolymorphicTest {
 
     @Test
     fun testDifferentRepresentations() {
-        val simpleModule = serializersModule(PayloadSerializer)
-        val binaryModule = serializersModule(BinaryPayloadSerializer)
+        val simpleModule = serializersModuleOf(PayloadSerializer)
+        val binaryModule = serializersModuleOf(BinaryPayloadSerializer)
 
-        val json1 = Json { useArrayPolymorphism = true; serialModule = simpleModule }
-        val json2 = Json { useArrayPolymorphism = true; serialModule = binaryModule }
+        val json1 = Json { useArrayPolymorphism = true; serializersModule = simpleModule }
+        val json2 = Json { useArrayPolymorphism = true; serializersModule = binaryModule }
 
         // in json1, Payload would be serialized with PayloadSerializer,
         // in json2, Payload would be serialized with BinaryPayloadSerializer
@@ -101,18 +104,18 @@ class ContextAndPolymorphicTest {
         assertEquals("""{"ps":["737472696E67"]}""", json2.encodeToString(PayloadList.serializer(), list))
     }
 
-    private fun SerialDescriptor.inContext(module: SerialModule): SerialDescriptor = when (kind) {
-        UnionKind.CONTEXTUAL -> requireNotNull(module.getContextualDescriptor(this)) { "Expected $this to be registered in module" }
+    private fun SerialDescriptor.inContext(module: SerializersModule): SerialDescriptor = when (kind) {
+        SerialKind.CONTEXTUAL -> requireNotNull(module.getContextualDescriptor(this)) { "Expected $this to be registered in module" }
         else -> error("Expected this function to be called on CONTEXTUAL descriptor")
     }
 
     @Test
     fun testResolveContextualDescriptor() {
-        val simpleModule = serializersModule(PayloadSerializer)
-        val binaryModule = serializersModule(BinaryPayloadSerializer)
+        val simpleModule = serializersModuleOf(PayloadSerializer)
+        val binaryModule = serializersModuleOf(BinaryPayloadSerializer)
 
-        val contextDesc = EnhancedData.serializer().descriptor.elementDescriptors()[1] // @ContextualSer stringPayload
-        assertEquals(UnionKind.CONTEXTUAL, contextDesc.kind)
+        val contextDesc = EnhancedData.serializer().descriptor.elementDescriptors.toList()[1] // @ContextualSer stringPayload
+        assertEquals(SerialKind.CONTEXTUAL, contextDesc.kind)
         assertEquals(0, contextDesc.elementsCount)
 
         val resolvedToDefault = contextDesc.inContext(simpleModule)
@@ -126,8 +129,8 @@ class ContextAndPolymorphicTest {
     }
 
     @Test
-    fun testContextSerializerUsesDefaultIfModuleIsEmpty() {
-        val s = Json(JsonConfiguration(unquotedPrint = true, useArrayPolymorphism = true)).encodeToString(EnhancedData.serializer(), value)
-        assertEquals("{data:{a:100500,b:42},stringPayload:{s:string},binaryPayload:62696E617279}", s)
+    fun testContextualSerializerUsesDefaultIfModuleIsEmpty() {
+        val s = Json { useArrayPolymorphism = true }.encodeToString(EnhancedData.serializer(), value)
+        assertEquals("""{"data":{"a":100500,"b":42},"stringPayload":{"s":"string"},"binaryPayload":"62696E617279"}""", s)
     }
 }

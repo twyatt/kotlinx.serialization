@@ -38,11 +38,11 @@ internal class ProtobufReader(private val input: ByteArrayInput) {
 
     fun skipElement() {
         when (currentType) {
-            ProtoBuf.VARINT -> readInt(ProtoNumberType.DEFAULT)
-            ProtoBuf.i64 -> readLong(ProtoNumberType.FIXED)
-            ProtoBuf.SIZE_DELIMITED -> readObject()
-            ProtoBuf.i32 -> readInt(ProtoNumberType.FIXED)
-            else -> throw ProtobufDecodingException("Unsupported start group or end group wire type")
+            VARINT -> readInt(ProtoIntegerType.DEFAULT)
+            i64 -> readLong(ProtoIntegerType.FIXED)
+            SIZE_DELIMITED -> readByteArray()
+            i32 -> readInt(ProtoIntegerType.FIXED)
+            else -> throw ProtobufDecodingException("Unsupported start group or end group wire type: $currentType")
         }
     }
 
@@ -51,46 +51,46 @@ internal class ProtobufReader(private val input: ByteArrayInput) {
         if (currentType != expected) throw ProtobufDecodingException("Expected wire type $expected, but found $currentType")
     }
 
-    fun readObject(): ByteArray {
-        assertWireType(ProtoBuf.SIZE_DELIMITED)
+    fun readByteArray(): ByteArray {
+        assertWireType(SIZE_DELIMITED)
+        return readByteArrayNoTag()
+    }
+
+    fun readByteArrayNoTag(): ByteArray {
         val length = decode32()
-        check(length >= 0)
+        checkLength(length)
         return input.readExactNBytes(length)
     }
 
-    fun readObjectNoTag(): ByteArray {
+    fun objectInput(): ByteArrayInput {
+        assertWireType(SIZE_DELIMITED)
+        return objectTaglessInput()
+    }
+
+    fun objectTaglessInput(): ByteArrayInput {
         val length = decode32()
-        check(length >= 0)
-        return input.readExactNBytes(length)
+        checkLength(length)
+        return input.slice(length)
     }
 
-    private fun ByteArrayInput.readExactNBytes(bytesCount: Int): ByteArray {
-        if (bytesCount > availableBytes) {
-            error("Unexpected EOF, available $availableBytes bytes, requested: $bytesCount")
-        }
-        val array = ByteArray(bytesCount)
-        read(array, 0, bytesCount)
-        return array
-    }
-
-    fun readInt(format: ProtoNumberType): Int {
-        val wireType = if (format == ProtoNumberType.FIXED) ProtoBuf.i32 else ProtoBuf.VARINT
+    fun readInt(format: ProtoIntegerType): Int {
+        val wireType = if (format == ProtoIntegerType.FIXED) i32 else VARINT
         assertWireType(wireType)
         return decode32(format)
     }
 
     fun readInt32NoTag(): Int = decode32()
 
-    fun readLong(format: ProtoNumberType): Long {
-        val wireType = if (format == ProtoNumberType.FIXED) ProtoBuf.i64 else ProtoBuf.VARINT
+    fun readLong(format: ProtoIntegerType): Long {
+        val wireType = if (format == ProtoIntegerType.FIXED) i64 else VARINT
         assertWireType(wireType)
         return decode64(format)
     }
 
-    fun readLongNoTag(): Long = decode64(ProtoNumberType.DEFAULT)
+    fun readLongNoTag(): Long = decode64(ProtoIntegerType.DEFAULT)
 
     fun readFloat(): Float {
-        assertWireType(ProtoBuf.i32)
+        assertWireType(i32)
         return Float.fromBits(readIntLittleEndian())
     }
 
@@ -117,7 +117,7 @@ internal class ProtobufReader(private val input: ByteArrayInput) {
     }
 
     fun readDouble(): Double {
-        assertWireType(ProtoBuf.i64)
+        assertWireType(i64)
         return Double.fromBits(readLongLittleEndian())
     }
 
@@ -126,31 +126,60 @@ internal class ProtobufReader(private val input: ByteArrayInput) {
     }
 
     fun readString(): String {
-        assertWireType(ProtoBuf.SIZE_DELIMITED)
+        assertWireType(SIZE_DELIMITED)
         val length = decode32()
-        check(length >= 0)
+        checkLength(length)
         return input.readString(length)
     }
 
     fun readStringNoTag(): String {
         val length = decode32()
-        check(length >= 0)
+        checkLength(length)
         return input.readString(length)
     }
 
-    private fun decode32(format: ProtoNumberType = ProtoNumberType.DEFAULT): Int = when (format) {
-        ProtoNumberType.DEFAULT -> input.readVarint64(false).toInt()
-        ProtoNumberType.SIGNED -> Varint.decodeSignedVarintInt(
-            input
-        )
-        ProtoNumberType.FIXED -> readIntLittleEndian()
+    private fun checkLength(length: Int) {
+        if (length < 0) {
+            throw ProtobufDecodingException("Unexpected negative length: $length")
+        }
     }
 
-    private fun decode64(format: ProtoNumberType = ProtoNumberType.DEFAULT): Long = when (format) {
-        ProtoNumberType.DEFAULT -> input.readVarint64(false)
-        ProtoNumberType.SIGNED -> Varint.decodeSignedVarintLong(
+    private fun decode32(format: ProtoIntegerType = ProtoIntegerType.DEFAULT): Int = when (format) {
+        ProtoIntegerType.DEFAULT -> input.readVarint64(false).toInt()
+        ProtoIntegerType.SIGNED -> decodeSignedVarintInt(
             input
         )
-        ProtoNumberType.FIXED -> readLongLittleEndian()
+        ProtoIntegerType.FIXED -> readIntLittleEndian()
+    }
+
+    private fun decode64(format: ProtoIntegerType = ProtoIntegerType.DEFAULT): Long = when (format) {
+        ProtoIntegerType.DEFAULT -> input.readVarint64(false)
+        ProtoIntegerType.SIGNED -> decodeSignedVarintLong(
+            input
+        )
+        ProtoIntegerType.FIXED -> readLongLittleEndian()
+    }
+
+    /**
+     *  Source for all varint operations:
+     *  https://github.com/addthis/stream-lib/blob/master/src/main/java/com/clearspring/analytics/util/Varint.java
+     */
+    private fun decodeSignedVarintInt(input: ByteArrayInput): Int {
+        val raw = input.readVarint32()
+        val temp = raw shl 31 shr 31 xor raw shr 1
+        // This extra step lets us deal with the largest signed values by treating
+        // negative results from read unsigned methods as like unsigned values.
+        // Must re-flip the top bit if the original read value had it set.
+        return temp xor (raw and (1 shl 31))
+    }
+
+    private fun decodeSignedVarintLong(input: ByteArrayInput): Long {
+        val raw = input.readVarint64(false)
+        val temp = raw shl 63 shr 63 xor raw shr 1
+        // This extra step lets us deal with the largest signed values by treating
+        // negative results from read unsigned methods as like unsigned values
+        // Must re-flip the top bit if the original read value had it set.
+        return temp xor (raw and (1L shl 63))
+
     }
 }

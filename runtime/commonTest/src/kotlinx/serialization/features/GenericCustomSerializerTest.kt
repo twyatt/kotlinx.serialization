@@ -6,6 +6,8 @@ package kotlinx.serialization.features
 
 import kotlinx.serialization.*
 import kotlinx.serialization.builtins.*
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
 import kotlinx.serialization.internal.*
 import kotlinx.serialization.json.*
 import kotlin.test.*
@@ -32,7 +34,7 @@ class CheckedData<T : Any>(val data: T, val checkSum: ByteArray) {
 
 @Serializer(forClass = CheckedData::class)
 class CheckedDataSerializer<T : Any>(private val dataSerializer: KSerializer<T>) : KSerializer<CheckedData<T>> {
-    override val descriptor: SerialDescriptor = SerialDescriptor("CheckedDataSerializer") {
+    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("CheckedDataSerializer") {
         val dataDescriptor = dataSerializer.descriptor
         element("data", dataDescriptor)
         element("checkSum", ByteArraySerializer().descriptor)
@@ -51,7 +53,7 @@ class CheckedDataSerializer<T : Any>(private val dataSerializer: KSerializer<T>)
         lateinit var sum: ByteArray
         loop@ while (true) {
             when (val i = inp.decodeElementIndex(descriptor)) {
-                CompositeDecoder.READ_DONE -> break@loop
+                CompositeDecoder.DECODE_DONE -> break@loop
                 0 -> data = inp.decodeSerializableElement(descriptor, i, dataSerializer)
                 1 -> sum = InternalHexConverter.parseHexBinary(inp.decodeStringElement(descriptor, i))
                 else -> throw SerializationException("Unknown index $i")

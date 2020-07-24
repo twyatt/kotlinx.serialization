@@ -5,7 +5,9 @@
 package kotlinx.serialization.protobuf
 
 import kotlinx.serialization.*
-import kotlinx.serialization.json.*
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
+import kotlinx.serialization.descriptors.*
 import kotlin.test.*
 
 class ProtobufMissingFieldsTest {
@@ -48,49 +50,48 @@ class ProtobufMissingFieldsTest {
 
     @Serializable
     data class Items(
-        @ProtoId(1)
+        @ProtoNumber(1)
         val items: List<Item> = emptyList(),
-        @ProtoId(2)
+        @ProtoNumber(2)
         val pageSize: Int? = null,
-        @ProtoId(3)
+        @ProtoNumber(3)
         val nextPage: Boolean = false
     )
 
     @Serializable
     data class Item(
-        @ProtoId(1)
+        @ProtoNumber(1)
         val id: Int,
-        @ProtoId(2) @Serializable(with = ItemPlatformSerializer::class)
+        @ProtoNumber(2) @Serializable(with = ItemPlatformSerializer::class)
         val platform: ItemPlatform = ItemPlatform.Unknown,
-        @ProtoId(3)
+        @ProtoNumber(3)
         val language: List<String> = emptyList(),
-        @ProtoId(4) @Serializable(with = ItemContextSerializer::class)
+        @ProtoNumber(4) @Serializable(with = ItemContextSerializer::class)
         val context: ItemContext = ItemContext.Unknown
     )
 
     @Serializable
     data class ItemsWithoutPageSize(
-        @ProtoId(1)
+        @ProtoNumber(1)
         val items: List<ItemWithoutPlatform> = emptyList(),
-        @ProtoId(3)
+        @ProtoNumber(3)
         val nextPage: Boolean = false
     )
 
     @Serializable
     data class ItemWithoutPlatform(
-        @ProtoId(1)
+        @ProtoNumber(1)
         val id: Int,
-        @ProtoId(3)
+        @ProtoNumber(3)
         val language: List<String> = emptyList(),
-        @ProtoId(4) @Serializable(with = ItemContextSerializer::class)
+        @ProtoNumber(4) @Serializable(with = ItemContextSerializer::class)
         val context: ItemContext = ItemContext.Unknown
     )
 
     class ItemPlatformSerializer : KSerializer<ItemPlatform> {
-
-        override val descriptor: SerialDescriptor = SerialDescriptor("ItemPlatform", UnionKind.ENUM_KIND) {
+        override val descriptor: SerialDescriptor = buildSerialDescriptor("ItemPlatform", SerialKind.ENUM) {
             enumValues<ItemPlatform>().forEach {
-                element(it.name, SerialDescriptor("$serialName.${it.name}", StructureKind.OBJECT))
+                element(it.name, buildSerialDescriptor("$serialName.${it.name}", StructureKind.OBJECT))
             }
         }
 
@@ -106,9 +107,9 @@ class ProtobufMissingFieldsTest {
 
     class ItemContextSerializer : KSerializer<ItemContext> {
 
-        override val descriptor: SerialDescriptor = SerialDescriptor("ItemContext", UnionKind.ENUM_KIND) {
+        override val descriptor: SerialDescriptor = buildSerialDescriptor("ItemContext", SerialKind.ENUM) {
             enumValues<ItemContext>().forEach {
-                element(it.name, SerialDescriptor("$serialName.${it.name}", StructureKind.OBJECT))
+                element(it.name, buildSerialDescriptor("$serialName.${it.name}", StructureKind.OBJECT))
             }
         }
 

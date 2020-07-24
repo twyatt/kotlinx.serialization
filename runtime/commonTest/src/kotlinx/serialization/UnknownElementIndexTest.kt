@@ -4,7 +4,8 @@
 
 package kotlinx.serialization
 
-import kotlinx.serialization.CompositeDecoder.Companion.UNKNOWN_NAME
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.CompositeDecoder.Companion.UNKNOWN_NAME
 import kotlinx.serialization.encoding.*
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
@@ -25,7 +26,7 @@ class UnknownElementIndexTest {
     @Test
     fun testCompilerComplainsAboutIncorrectIndex() {
         assertFailsWith(UnknownFieldException::class) {
-            MalformedReader().decode(Holder.serializer())
+            MalformedReader().decodeSerializableValue(Holder.serializer())
         }
     }
 

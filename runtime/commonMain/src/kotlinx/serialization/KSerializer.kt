@@ -4,6 +4,10 @@
 
 package kotlinx.serialization
 
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
+import kotlinx.serialization.encoding.updateModeDeprecated
+
 /**
  * KSerializer is responsible for the representation of a serial form of a type [T]
  * in terms of [encoders][Encoder] and [decoders][Decoder] and for constructing and deconstructing [T]
@@ -153,7 +157,7 @@ public interface DeserializationStrategy<T> {
      *     var list: List<String>? = null
      *     loop@ while (true) {
      *         when (val index = decodeElementIndex(descriptor)) {
-     *             READ_DONE -> break@loop
+     *             DECODE_DONE -> break@loop
      *             0 -> {
      *                 // Decode 'int' property as Int
      *                 int = decodeIntElement(descriptor, index = 0)

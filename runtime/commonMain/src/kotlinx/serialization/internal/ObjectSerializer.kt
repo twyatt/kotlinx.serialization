@@ -5,6 +5,8 @@
 package kotlinx.serialization.internal
 
 import kotlinx.serialization.*
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
 
 /**
  * Serializer for Kotlin's singletons (denoted by `object` keyword).
@@ -14,7 +16,7 @@ import kotlinx.serialization.*
  */
 @PublishedApi
 internal class ObjectSerializer<T : Any>(serialName: String, private val objectInstance: T) : KSerializer<T> {
-    override val descriptor: SerialDescriptor = SerialDescriptor(serialName, StructureKind.OBJECT)
+    override val descriptor: SerialDescriptor = buildSerialDescriptor(serialName, StructureKind.OBJECT)
 
     override fun serialize(encoder: Encoder, value: T) {
         encoder.beginStructure(descriptor).endStructure(descriptor)

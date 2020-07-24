@@ -5,7 +5,7 @@
 package kotlinx.serialization.encoding
 
 import kotlinx.serialization.*
-import kotlinx.serialization.builtins.*
+import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.modules.*
 
 /**
@@ -15,8 +15,8 @@ import kotlinx.serialization.modules.*
  * See [Decoder] documentation for information about each particular `decode*` method.
  */
 public abstract class AbstractDecoder : Decoder, CompositeDecoder {
-    override val context: SerialModule
-        get() = EmptyModule
+    override val serializersModule: SerializersModule
+        get() = EmptySerializersModule
 
     @Suppress("DEPRECATION")
     @Deprecated(updateModeDeprecated, level = DeprecationLevel.ERROR)
@@ -29,8 +29,6 @@ public abstract class AbstractDecoder : Decoder, CompositeDecoder {
 
     override fun decodeNotNullMark(): Boolean = true
     override fun decodeNull(): Nothing? = null
-    override fun decodeUnit(): Unit = Unit.serializer().deserialize(this)
-
     override fun decodeBoolean(): Boolean = decodeValue() as Boolean
     override fun decodeByte(): Byte = decodeValue() as Byte
     override fun decodeShort(): Short = decodeValue() as Short
@@ -63,7 +61,6 @@ public abstract class AbstractDecoder : Decoder, CompositeDecoder {
     override fun endStructure(descriptor: SerialDescriptor) {
     }
 
-    final override fun decodeUnitElement(descriptor: SerialDescriptor, index: Int): Unit = decodeUnit()
     final override fun decodeBooleanElement(descriptor: SerialDescriptor, index: Int): Boolean = decodeBoolean()
     final override fun decodeByteElement(descriptor: SerialDescriptor, index: Int): Byte = decodeByte()
     final override fun decodeShortElement(descriptor: SerialDescriptor, index: Int): Short = decodeShort()

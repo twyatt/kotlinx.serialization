@@ -5,8 +5,10 @@
 package kotlinx.serialization.features
 
 import kotlinx.serialization.*
+import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.json.*
 import kotlinx.serialization.modules.*
+import kotlin.reflect.*
 import kotlin.test.*
 
 class PolymorphicOnClassesTest {
@@ -59,17 +61,20 @@ class PolymorphicOnClassesTest {
         return Holder(gen(), listOf(gen(), gen()), gen(), setOf(SimpleMessage()), DoubleSimpleMessage("DoubleSimple"), gen())
     }
 
+    @Suppress("UNCHECKED_CAST")
     private val testModule = SerializersModule {
-        polymorphic(Message::class, IMessage::class, SimpleMessage::class) {
-            addSubclass(SimpleMessage::class, SimpleMessage.serializer())
-            addSubclass(DoubleSimpleMessage::class, DoubleSimpleMessage.serializer())
-            addSubclass(MessageWithId::class, MessageWithId.serializer())
+        listOf(Message::class, IMessage::class, SimpleMessage::class).forEach { clz ->
+            polymorphic(clz as KClass<IMessage>) {
+                subclass(SimpleMessage.serializer())
+                subclass(DoubleSimpleMessage.serializer())
+                subclass(MessageWithId.serializer())
+            }
         }
     }
 
     @Test
     fun testEnablesImplicitlyOnInterfacesAndAbstractClasses() {
-        val json = Json { prettyPrint = false; useArrayPolymorphism = true; serialModule = testModule }
+        val json = Json { prettyPrint = false; useArrayPolymorphism = true; serializersModule = testModule }
         val data = genTestData()
         assertEquals(
             """{"iMessage":["MessageWithId",{"id":0,"body":"Message #0"}],""" +
@@ -83,20 +88,20 @@ class PolymorphicOnClassesTest {
 
     @Test
     fun testDescriptor() {
-        val polyDesc = Holder.serializer().descriptor.elementDescriptors().first()
+        val polyDesc = Holder.serializer().descriptor.elementDescriptors.first()
         assertEquals(PolymorphicSerializer(IMessage::class).descriptor, polyDesc)
         assertEquals(2, polyDesc.elementsCount)
         assertEquals(PrimitiveKind.STRING, polyDesc.getElementDescriptor(0).kind)
     }
 
-    private fun SerialDescriptor.inContext(module: SerialModule): List<SerialDescriptor> = when (kind) {
+    private fun SerialDescriptor.inContext(module: SerializersModule): List<SerialDescriptor> = when (kind) {
         PolymorphicKind.OPEN -> module.getPolymorphicDescriptors(this)
         else -> error("Expected this function to be called on OPEN descriptor")
     }
 
     @Test
     fun testResolvePolymorphicDescriptor() {
-        val polyDesc = Holder.serializer().descriptor.elementDescriptors().first() // iMessage: IMessage
+        val polyDesc = Holder.serializer().descriptor.elementDescriptors.first() // iMessage: IMessage
 
         assertEquals(PolymorphicKind.OPEN, polyDesc.kind)
 
@@ -108,15 +113,14 @@ class PolymorphicOnClassesTest {
 
     @Test
     fun testDocSampleWithAllDistinct() {
-        fun allDistinctNames(descriptor: SerialDescriptor, module: SerialModule) = when (descriptor.kind) {
+        fun allDistinctNames(descriptor: SerialDescriptor, module: SerializersModule) = when (descriptor.kind) {
             is PolymorphicKind.OPEN -> module.getPolymorphicDescriptors(descriptor)
-                .map { it.elementNames() }.flatten().toSet()
-            is UnionKind.CONTEXTUAL -> module.getContextualDescriptor(descriptor)
-                ?.elementNames().orEmpty().toSet()
-            else -> descriptor.elementNames().toSet()
+                .map { it.elementNames.toList() }.flatten().toSet()
+            is SerialKind.CONTEXTUAL -> module.getContextualDescriptor(descriptor)?.elementNames?.toList().orEmpty().toSet()
+            else -> descriptor.elementNames.toSet()
         }
 
-        val polyDesc = Holder.serializer().descriptor.elementDescriptors().first() // iMessage: IMessage
+        val polyDesc = Holder.serializer().descriptor.elementDescriptors.first() // iMessage: IMessage
         assertEquals(setOf("id", "body", "body2"), allDistinctNames(polyDesc, testModule))
         assertEquals(setOf("id", "body"), allDistinctNames(MessageWithId.serializer().descriptor, testModule))
     }

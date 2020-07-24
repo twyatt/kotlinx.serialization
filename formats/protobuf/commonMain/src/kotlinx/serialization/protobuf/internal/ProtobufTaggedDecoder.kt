@@ -5,6 +5,8 @@
 package kotlinx.serialization.protobuf.internal
 
 import kotlinx.serialization.*
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
 import kotlinx.serialization.protobuf.*
 
 internal abstract class ProtobufTaggedDecoder : ProtobufTaggedBase(), Decoder, CompositeDecoder {
@@ -91,13 +93,5 @@ internal abstract class ProtobufTaggedDecoder : ProtobufTaggedBase(), Decoder, C
         } else {
             decodeNull()
         }
-    }
-
-    override fun decodeUnit() {
-        error("Should not be called")
-    }
-
-    override fun decodeUnitElement(descriptor: SerialDescriptor, index: Int) {
-        error("Should not be called")
     }
 }

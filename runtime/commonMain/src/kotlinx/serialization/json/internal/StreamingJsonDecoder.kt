@@ -5,7 +5,9 @@
 package kotlinx.serialization.json.internal
 
 import kotlinx.serialization.*
-import kotlinx.serialization.CompositeDecoder.Companion.UNKNOWN_NAME
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.CompositeDecoder.Companion.UNKNOWN_NAME
+import kotlinx.serialization.internal.*
 import kotlinx.serialization.encoding.*
 import kotlinx.serialization.json.*
 import kotlinx.serialization.modules.*
@@ -20,7 +22,7 @@ internal class StreamingJsonDecoder internal constructor(
     @JvmField internal val reader: JsonReader
 ) : JsonDecoder, AbstractDecoder() {
 
-    public override val context: SerialModule = json.context
+    public override val serializersModule: SerializersModule = json.serializersModule
     private var currentIndex = -1
     private val configuration = json.configuration
 
@@ -85,7 +87,7 @@ internal class StreamingJsonDecoder internal constructor(
                     0 -> 0
                     1 -> 1
                     else -> {
-                        CompositeDecoder.READ_DONE
+                        CompositeDecoder.DECODE_DONE
                     }
                 }
             }
@@ -103,7 +105,7 @@ internal class StreamingJsonDecoder internal constructor(
         }
         return if (!reader.canBeginValue) {
             reader.require(tokenClass != TC_COMMA) { "Unexpected trailing comma" }
-            CompositeDecoder.READ_DONE
+            CompositeDecoder.DECODE_DONE
         } else {
             ++currentIndex
         }
@@ -115,7 +117,7 @@ internal class StreamingJsonDecoder internal constructor(
     private fun coerceInputValue(descriptor: SerialDescriptor, index: Int): Boolean {
         val elementDescriptor = descriptor.getElementDescriptor(index)
         if (reader.tokenClass == TC_NULL && !elementDescriptor.isNullable) return true // null for non-nullable
-        if (elementDescriptor.kind == UnionKind.ENUM_KIND) {
+        if (elementDescriptor.kind == SerialKind.ENUM) {
             val enumValue = reader.peekString(configuration.isLenient)
                     ?: return false // if value is not a string, decodeEnum() will throw correct exception
             val enumIndex = elementDescriptor.getElementIndex(enumValue)
@@ -147,7 +149,7 @@ internal class StreamingJsonDecoder internal constructor(
 
             if (isUnknown && !configuration.ignoreUnknownKeys) {
                 reader.fail(
-                    "Encountered an unknown key '$key'. You can enable 'JsonConfiguration.ignoreUnknownKeys' property" +
+                    "Encountered an unknown key '$key'. You can enable 'JsonBuilder.ignoreUnknownKeys' property" +
                             " to ignore unknown keys"
                 )
             } else {
@@ -159,7 +161,7 @@ internal class StreamingJsonDecoder internal constructor(
                 reader.require(reader.canBeginValue, reader.currentPosition) { "Unexpected trailing comma" }
             }
         }
-        return CompositeDecoder.READ_DONE
+        return CompositeDecoder.DECODE_DONE
     }
 
     private fun decodeListIndex(tokenClass: Byte): Int {
@@ -169,7 +171,7 @@ internal class StreamingJsonDecoder internal constructor(
         }
         return if (!reader.canBeginValue) {
             reader.require(tokenClass != TC_COMMA) { "Unexpected trailing comma" }
-            CompositeDecoder.READ_DONE
+            CompositeDecoder.DECODE_DONE
         } else {
             ++currentIndex
         }

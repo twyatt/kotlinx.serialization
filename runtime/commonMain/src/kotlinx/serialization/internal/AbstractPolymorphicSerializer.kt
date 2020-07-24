@@ -5,6 +5,7 @@
 package kotlinx.serialization.internal
 
 import kotlinx.serialization.*
+import kotlinx.serialization.encoding.*
 import kotlin.reflect.*
 
 /**
@@ -42,7 +43,7 @@ public abstract class AbstractPolymorphicSerializer<T : Any> internal constructo
 
         mainLoop@ while (true) {
             when (val index = decodeElementIndex(descriptor)) {
-                CompositeDecoder.READ_DONE -> {
+                CompositeDecoder.DECODE_DONE -> {
                     break@mainLoop
                 }
                 0 -> {
@@ -56,7 +57,7 @@ public abstract class AbstractPolymorphicSerializer<T : Any> internal constructo
                 else -> throw SerializationException(
                     "Invalid index in polymorphic deserialization of " +
                             (klassName ?: "unknown class") +
-                            "\n Expected 0, 1 or READ_DONE(-1), but found $index"
+                            "\n Expected 0, 1 or DECODE_DONE(-1), but found $index"
                 )
             }
         }
@@ -80,7 +81,7 @@ public abstract class AbstractPolymorphicSerializer<T : Any> internal constructo
     public open fun findPolymorphicSerializer(
         decoder: CompositeDecoder,
         klassName: String
-    ): DeserializationStrategy<out T> = decoder.context.getPolymorphic(baseClass, klassName)
+    ): DeserializationStrategy<out T> = decoder.serializersModule.getPolymorphic(baseClass, klassName)
         ?: throwSubtypeNotRegistered(klassName, baseClass)
 
 
@@ -93,7 +94,7 @@ public abstract class AbstractPolymorphicSerializer<T : Any> internal constructo
         encoder: Encoder,
         value: T
     ): SerializationStrategy<T> =
-        encoder.context.getPolymorphic(baseClass, value) ?: throwSubtypeNotRegistered(value::class, baseClass)
+        encoder.serializersModule.getPolymorphic(baseClass, value) ?: throwSubtypeNotRegistered(value::class, baseClass)
 }
 
 private fun throwSubtypeNotRegistered(subClassName: String, baseClass: KClass<*>): Nothing =

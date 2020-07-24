@@ -13,14 +13,17 @@ class JsonNestedPolymorphismTest : JsonTestBase() {
 
     private val polymorphicJson = Json {
         isLenient = true
-        serialModule = SerializersModule {
-            polymorphic(Any::class, InnerBase::class) {
+        serializersModule = SerializersModule {
+            polymorphic(Any::class) {
                 subclass(InnerImpl.serializer())
                 subclass(InnerImpl2.serializer())
+                subclass(OuterImpl.serializer())
+
             }
 
-            polymorphic(Any::class) {
-                subclass(OuterImpl.serializer())
+            polymorphic(InnerBase::class) {
+                subclass(InnerImpl.serializer())
+                subclass(InnerImpl2.serializer())
             }
         }
     }

@@ -6,6 +6,8 @@
 package kotlinx.serialization.internal
 
 import kotlinx.serialization.*
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
 import kotlin.native.concurrent.*
 
 @SharedImmutable
@@ -43,7 +45,7 @@ public sealed class KeyValueSerializer<K, V, R>(
         var value: Any? = NULL
         mainLoop@ while (true) {
             when (val idx = composite.decodeElementIndex(descriptor)) {
-                CompositeDecoder.READ_DONE -> {
+                CompositeDecoder.DECODE_DONE -> {
                     break@mainLoop
                 }
                 0 -> {
@@ -80,7 +82,7 @@ public class MapEntrySerializer<K, V>(
     /*
      * Kind 'MAP' because it is represented in a map-like manner with "key: value" serialized directly
      */
-    override val descriptor: SerialDescriptor = SerialDescriptor("kotlin.collections.Map.Entry", StructureKind.MAP) {
+    override val descriptor: SerialDescriptor = buildSerialDescriptor("kotlin.collections.Map.Entry", StructureKind.MAP) {
         element("key", keySerializer.descriptor)
         element("value", valueSerializer.descriptor)
     }
@@ -101,7 +103,7 @@ public class PairSerializer<K, V>(
     keySerializer: KSerializer<K>,
     valueSerializer: KSerializer<V>
 ) : KeyValueSerializer<K, V, Pair<K, V>>(keySerializer, valueSerializer) {
-    override val descriptor: SerialDescriptor = SerialDescriptor("kotlin.Pair") {
+    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("kotlin.Pair") {
         element("first", keySerializer.descriptor)
         element("second", valueSerializer.descriptor)
     }
@@ -127,7 +129,7 @@ public class TripleSerializer<A, B, C>(
     private val cSerializer: KSerializer<C>
 ) : KSerializer<Triple<A, B, C>> {
 
-    override val descriptor: SerialDescriptor = SerialDescriptor("kotlin.Triple") {
+    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("kotlin.Triple") {
         element("first", aSerializer.descriptor)
         element("second", bSerializer.descriptor)
         element("third", cSerializer.descriptor)
@@ -163,7 +165,7 @@ public class TripleSerializer<A, B, C>(
         var c: Any? = NULL
         mainLoop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                CompositeDecoder.READ_DONE -> {
+                CompositeDecoder.DECODE_DONE -> {
                     break@mainLoop
                 }
                 0 -> {

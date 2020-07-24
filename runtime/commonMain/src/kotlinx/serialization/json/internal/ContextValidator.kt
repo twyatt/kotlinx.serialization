@@ -8,7 +8,7 @@ import kotlinx.serialization.*
 import kotlinx.serialization.modules.*
 import kotlin.reflect.*
 
-internal class ContextValidator(private val discriminator: String) : SerialModuleCollector {
+internal class ContextValidator(private val discriminator: String) : SerializersModuleCollector {
     override fun <T : Any> contextual(kClass: KClass<T>, serializer: KSerializer<T>) {
         // Nothing here
     }
@@ -32,7 +32,7 @@ internal class ContextValidator(private val discriminator: String) : SerialModul
         }
     }
 
-    override fun <Base : Any> defaultPolymorphic(
+    override fun <Base : Any> polymorphicDefault(
         baseClass: KClass<Base>,
         defaultSerializerProvider: (className: String) -> DeserializationStrategy<out Base>?
     ) {
