@@ -5,6 +5,7 @@
 package kotlinx.serialization.cbor.internal
 
 import kotlinx.serialization.*
+import kotlinx.serialization.builtins.*
 import kotlinx.serialization.cbor.*
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.*
@@ -20,8 +21,9 @@ private const val NEXT_DOUBLE = 0xfb
 
 private const val BEGIN_ARRAY = 0x9f
 private const val BEGIN_MAP = 0xbf
-private const val ADDITIONAL_INFORMATION_INDEFINITE_LENGTH = 31
 private const val BREAK = 0xff
+
+private const val ADDITIONAL_INFORMATION_INDEFINITE_LENGTH = 31
 
 private const val HEADER_BYTE_STRING: Byte = 0b010_00000
 private const val HEADER_STRING: Byte = 0b011_00000
@@ -49,7 +51,7 @@ internal open class CborWriter(private val cbor: Cbor, protected val encoder: Cb
     private var encodeByteArrayAsByteString = false
 
     override fun <T> encodeSerializableValue(serializer: SerializationStrategy<T>, value: T) {
-        if (serializer.descriptor.kind is StructureKind.LIST && encodeByteArrayAsByteString) {
+        if (serializer.descriptor == ByteArraySerializer().descriptor && encodeByteArrayAsByteString) {
             encoder.encodeByteString(value as ByteArray)
         } else {
             super.encodeSerializableValue(serializer, value)
@@ -453,4 +455,5 @@ private fun Iterable<ByteArray>.flatten(): ByteArray {
 }
 
 private fun SerialDescriptor.isByteString(index: Int): Boolean =
-    getElementAnnotations(index).find { it is ByteString } != null
+    getElementDescriptor(index) == ByteArraySerializer().descriptor &&
+        getElementAnnotations(index).find { it is ByteString } != null
