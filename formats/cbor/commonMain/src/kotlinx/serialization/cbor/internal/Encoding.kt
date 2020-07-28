@@ -23,7 +23,7 @@ private const val BEGIN_ARRAY = 0x9f
 private const val BEGIN_MAP = 0xbf
 private const val BREAK = 0xff
 
-private const val ADDITIONAL_INFORMATION_INDEFINITE_LENGTH = 31
+private const val ADDITIONAL_INFORMATION_INDEFINITE_LENGTH = 0x1f
 
 private const val HEADER_BYTE_STRING: Byte = 0b010_00000
 private const val HEADER_STRING: Byte = 0b011_00000
