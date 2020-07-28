@@ -4,6 +4,7 @@ import kotlinx.serialization.SerialInfo
 
 /**
  * Specifies that a [ByteArray] shall be encoded/decoded as CBOR major type 2: a byte string.
+ * For types other than [ByteArray], [ByteString] will have no effect.
  *
  * Example usage:
  *
